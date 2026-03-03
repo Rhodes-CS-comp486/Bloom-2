@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bloom – Create Account</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+</head>
+<body class="auth-body register-body">
+  <div class="register-container">
+    <div class="register-header">
+      <a href="{{ url_for('login') }}" class="auth-logo">
+        <span class="logo-icon">✿</span>
+        <span class="logo-text">bloom</span>
+      </a>
+      <h1 class="register-title">Plant Your Garden</h1>
+      <p class="register-subtitle">Create your account to begin tracking your cycle, building habits, and watching your garden grow.</p>
+    </div>
+
+    <form method="POST" class="register-form">
+
+      <!-- STEP 1: Account -->
+      <div class="form-section">
+        <div class="section-header">
+          <span class="section-num">01</span>
+          <div>
+            <h2 class="section-title">Your Account</h2>
+            <p class="section-desc">Set up your login credentials</p>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="first_name">First Name</label>
+            <input type="text" id="first_name" name="first_name" class="bloom-input"
+                   placeholder="Rose" value="{{ form_data.get('first_name','') }}"/>
+          </div>
+          <div class="form-group">
+            <label for="last_name">Last Name</label>
+            <input type="text" id="last_name" name="last_name" class="bloom-input"
+                   placeholder="Garden" value="{{ form_data.get('last_name','') }}"/>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="username">Username <span class="req">*</span></label>
+          <input type="text" id="username" name="username" class="bloom-input {% if errors.get('username') %}input-error{% endif %}"
+                 placeholder="rosegarden" required value="{{ form_data.get('username','') }}"/>
+          {% if errors.get('username') %}<span class="field-error">{{ errors.username }}</span>{% endif %}
+        </div>
+        <div class="form-group">
+          <label for="email">Email <span class="req">*</span></label>
+          <input type="email" id="email" name="email" class="bloom-input {% if errors.get('email') %}input-error{% endif %}"
+                 placeholder="rose@bloom.garden" required value="{{ form_data.get('email','') }}"/>
+          {% if errors.get('email') %}<span class="field-error">{{ errors.email }}</span>{% endif %}
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="password">Password <span class="req">*</span></label>
+            <input type="password" id="password" name="password" class="bloom-input {% if errors.get('password') %}input-error{% endif %}"
+                   placeholder="••••••••" required/>
+            {% if errors.get('password') %}<span class="field-error">{{ errors.password }}</span>{% endif %}
+          </div>
+          <div class="form-group">
+            <label for="confirm_password">Confirm Password <span class="req">*</span></label>
+            <input type="password" id="confirm_password" name="confirm_password" class="bloom-input {% if errors.get('confirm_password') %}input-error{% endif %}"
+                   placeholder="••••••••" required/>
+            {% if errors.get('confirm_password') %}<span class="field-error">{{ errors.confirm_password }}</span>{% endif %}
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="birth_date">Date of Birth</label>
+          <input type="date" id="birth_date" name="birth_date" class="bloom-input"
+                 value="{{ form_data.get('birth_date','') }}"/>
+        </div>
+      </div>
+
+      <!-- STEP 2: Cycle Tracking -->
+      <div class="form-section">
+        <div class="section-header">
+          <span class="section-num">02</span>
+          <div>
+            <h2 class="section-title">Cycle Information</h2>
+            <p class="section-desc">Help us predict your cycle accurately</p>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="cycle_length">Average Cycle Length <span class="label-hint">(days)</span></label>
+            <input type="number" id="cycle_length" name="cycle_length" class="bloom-input"
+                   min="21" max="45" value="{{ form_data.get('cycle_length', 28) }}" placeholder="28"/>
+            <span class="field-hint">Typically 21–35 days</span>
+          </div>
+          <div class="form-group">
+            <label for="period_length">Average Period Length <span class="label-hint">(days)</span></label>
+            <input type="number" id="period_length" name="period_length" class="bloom-input"
+                   min="1" max="10" value="{{ form_data.get('period_length', 5) }}" placeholder="5"/>
+            <span class="field-hint">Typically 3–7 days</span>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="last_period_date">First Day of Last Period</label>
+          <input type="date" id="last_period_date" name="last_period_date" class="bloom-input"
+                 value="{{ form_data.get('last_period_date','') }}"/>
+          <span class="field-hint">Used to predict your next cycle</span>
+        </div>
+        <div class="form-group">
+          <label>Typical Symptoms</label>
+          <div class="symptom-checkboxes">
+            {% set all_symptoms = ['Cramps', 'Bloating', 'Headache', 'Fatigue', 'Mood swings',
+                                   'Back pain', 'Breast tenderness', 'Acne', 'Nausea', 'Cravings'] %}
+            {% for sym in all_symptoms %}
+            <label class="symptom-chip">
+              <input type="checkbox" name="symptom_check" value="{{ sym }}"
+                     {% if form_data.get('typical_symptoms') and sym in form_data.get('typical_symptoms','') %}checked{% endif %}/>
+              <span>{{ sym }}</span>
+            </label>
+            {% endfor %}
+          </div>
+          <input type="hidden" id="typical_symptoms" name="typical_symptoms"
+                 value="{{ form_data.get('typical_symptoms','') }}"/>
+        </div>
+        <div class="form-group">
+          <label for="contraceptive_method">Contraceptive Method <span class="label-hint">(optional)</span></label>
+          <select id="contraceptive_method" name="contraceptive_method" class="bloom-input bloom-select">
+            <option value="">Prefer not to say / None</option>
+            <option value="pill" {% if form_data.get('contraceptive_method')=='pill' %}selected{% endif %}>Birth control pill</option>
+            <option value="iud_hormonal" {% if form_data.get('contraceptive_method')=='iud_hormonal' %}selected{% endif %}>Hormonal IUD</option>
+            <option value="iud_copper" {% if form_data.get('contraceptive_method')=='iud_copper' %}selected{% endif %}>Copper IUD</option>
+            <option value="implant" {% if form_data.get('contraceptive_method')=='implant' %}selected{% endif %}>Implant</option>
+            <option value="patch" {% if form_data.get('contraceptive_method')=='patch' %}selected{% endif %}>Patch</option>
+            <option value="ring" {% if form_data.get('contraceptive_method')=='ring' %}selected{% endif %}>Ring</option>
+            <option value="condoms" {% if form_data.get('contraceptive_method')=='condoms' %}selected{% endif %}>Condoms</option>
+            <option value="other" {% if form_data.get('contraceptive_method')=='other' %}selected{% endif %}>Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="toggle-label">
+            <input type="checkbox" name="trying_to_conceive" class="toggle-checkbox"
+                   {% if form_data.get('trying_to_conceive') %}checked{% endif %}/>
+            <span class="toggle-slider"></span>
+            <span>I am trying to conceive</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- STEP 3: Habits -->
+      <div class="form-section">
+        <div class="section-header">
+          <span class="section-num">03</span>
+          <div>
+            <h2 class="section-title">Habit Goals</h2>
+            <p class="section-desc">Which habits would you like to track? (you can add more later)</p>
+          </div>
+        </div>
+        <div class="preset-habits">
+          {% set habit_presets = [
+            ('💧', 'Drink Water', '#5b8fa8'),
+            ('🌿', 'Move Your Body', '#86b49c'),
+            ('🌸', 'Take Vitamins', '#e8a598'),
+            ('🧘', 'Meditate', '#c5b8e8'),
+            ('📖', 'Journal', '#c8a882'),
+            ('😴', 'Sleep 8 Hours', '#94b8c8'),
+            ('🥗', 'Eat Vegetables', '#8db87a'),
+            ('☀️', 'Morning Sunlight', '#e8c85a')
+          ] %}
+          {% for icon, name, color in habit_presets %}
+          <label class="habit-preset-chip" style="--chip-color: {{ color }}">
+            <input type="checkbox" name="preset_habits" value="{{ name }}" checked/>
+            <span class="chip-icon">{{ icon }}</span>
+            <span class="chip-name">{{ name }}</span>
+          </label>
+          {% endfor %}
+        </div>
+        <p class="preset-note">These will be added as default habits to track daily in your garden.</p>
+      </div>
+
+      <div class="register-submit">
+        <button type="submit" class="bloom-btn bloom-btn-primary bloom-btn-lg">
+          Plant My Garden ✿
+        </button>
+        <p class="auth-switch">Already have a garden? <a href="{{ url_for('login') }}">Sign in →</a></p>
+      </div>
+
+    </form>
+  </div>
+
+  <script>
+    // Sync symptom checkboxes to hidden input
+    function syncSymptoms() {
+      const checked = Array.from(document.querySelectorAll('input[name="symptom_check"]:checked'))
+        .map(cb => cb.value);
+      document.getElementById('typical_symptoms').value = checked.join(', ');
+    }
+    document.querySelectorAll('input[name="symptom_check"]').forEach(cb => {
+      cb.addEventListener('change', syncSymptoms);
+    });
+    syncSymptoms();
+  </script>
+</body>
+</html>
