@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}Bloom – Habits{% endblock %}
+
+{% block content %}
+<div class="habits-page">
+  <div class="habits-header">
+    <h1>My Habits <em>◎</em></h1>
+    <p>Build consistency, watch your garden bloom.</p>
+  </div>
+
+  <!-- Today's Progress -->
+  {% if habits %}
+  {% set completed_today = habit_status.values() | list | select | list | length %}
+  <div class="habits-progress-card">
+    <div class="hp-left">
+      <span class="hp-num">{{ completed_today }}/{{ habits | length }}</span>
+      <span class="hp-label">habits done today</span>
+    </div>
+    <div class="hp-bar-wrap">
+      <div class="hp-bar">
+        <div class="hp-fill" style="width: {{ (completed_today / habits|length * 100) | int if habits else 0 }}%"></div>
+      </div>
+      {% if completed_today == habits | length %}
+        <span class="hp-complete">✿ All done! Amazing!</span>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Habit List -->
+  <div class="habit-grid">
+    {% for habit in habits %}
+    {% set done = habit_status.get(habit.id, False) %}
+    <div class="habit-card {% if done %}habit-done{% endif %}" id="hcard-{{ habit.id }}" style="--hc: {{ habit.color }}">
+      <div class="hcard-top">
+        <span class="hcard-icon">{{ habit.icon }}</span>
+        <div class="hcard-info">
+          <h3 class="hcard-name">{{ habit.name }}</h3>
+          {% if habit.description %}<p class="hcard-desc">{{ habit.description }}</p>{% endif %}
+        </div>
+        <form action="{{ url_for('delete_habit', habit_id=habit.id) }}" method="POST"
+              onsubmit="return confirm('Remove this habit?')">
+          <button type="submit" class="hcard-delete" title="Remove habit">✕</button>
+        </form>
+      </div>
+      <div class="hcard-bottom">
+        <!-- Week mini-chart -->
+        <div class="week-chart">
+          {% set today_dow = today.weekday() %}
+          {% for i in range(7) %}
+            <div class="wc-day"></div>
+          {% endfor %}
+        </div>
+        <div class="hcard-actions">
+          <span class="week-stat">{{ week_stats.get(habit.id, 0) }}/7 this week</span>
+          <button class="habit-toggle-btn {% if done %}toggled{% endif %}"
+                  onclick="toggleHabit({{ habit.id }}, this)"
+                  style="background: {{ habit.color }}">
+            {% if done %}✓ Done{% else %}Mark Done{% endif %}
+          </button>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+
+    <!-- Add habit card -->
+    <div class="habit-card add-habit-card" id="addHabitCard" onclick="showAddForm()">
+      <div class="add-icon">＋</div>
+      <p>Add New Habit</p>
+    </div>
+  </div>
+
+  <!-- Add Habit Form (hidden) -->
+  <div id="addHabitForm" class="add-habit-form" style="display:none">
+    <h2>New Habit</h2>
+    <form method="POST" action="{{ url_for('add_habit') }}">
+      <div class="form-row">
+        <div class="form-group" style="flex:2">
+          <label>Habit Name *</label>
+          <input type="text" name="name" class="bloom-input" placeholder="e.g. Drink Water 💧" required/>
+        </div>
+        <div class="form-group" style="flex:1">
+          <label>Icon</label>
+          <input type="text" name="icon" class="bloom-input" placeholder="✿" maxlength="4"/>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Description</label>
+        <input type="text" name="description" class="bloom-input" placeholder="Brief description (optional)"/>
+      </div>
+      <div class="form-group">
+        <label>Color</label>
+        <div class="color-picker-row">
+          {% for color in ['#86b49c','#e8a598','#c5b8e8','#5b8fa8','#c8a882','#8db87a','#e8c85a','#94b8c8'] %}
+          <label class="color-swatch" style="background: {{ color }}">
+            <input type="radio" name="color" value="{{ color }}" {% if loop.first %}checked{% endif %}/>
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="bloom-btn bloom-btn-primary">Add Habit 🌱</button>
+        <button type="button" class="bloom-btn bloom-btn-ghost" onclick="hideAddForm()">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+async function toggleHabit(habitId, btn) {
+  const today = '{{ today }}';
+  const res = await fetch('/habits/toggle', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({habit_id: habitId, date: today})
+  });
+  const data = await res.json();
+  const card = document.getElementById('hcard-' + habitId);
+  if (data.completed) {
+    btn.classList.add('toggled');
+    btn.textContent = '✓ Done';
+    card.classList.add('habit-done');
+  } else {
+    btn.classList.remove('toggled');
+    btn.textContent = 'Mark Done';
+    card.classList.remove('habit-done');
+  }
+}
+
+function showAddForm() {
+  document.getElementById('addHabitCard').style.display = 'none';
+  document.getElementById('addHabitForm').style.display = 'block';
+  document.getElementById('addHabitForm').scrollIntoView({behavior:'smooth'});
+}
+
+function hideAddForm() {
+  document.getElementById('addHabitCard').style.display = 'flex';
+  document.getElementById('addHabitForm').style.display = 'none';
+}
+</script>
+{% endblock %}

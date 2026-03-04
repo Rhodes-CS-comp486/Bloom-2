@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% block title %}Bloom – Daily Check-in{% endblock %}
+
+{% block content %}
+<div class="checkin-page">
+  <div class="checkin-header">
+    <h1>Daily Check-in <em>♡</em></h1>
+    <p>How are you feeling today?</p>
+  </div>
+
+  <form method="POST" class="checkin-form">
+    <!-- Date -->
+    <div class="ci-date-row">
+      <label>Check-in for:</label>
+      <input type="date" name="_ignored" class="bloom-input ci-date-input" value="{{ checkin_date }}" readonly style="max-width:160px"/>
+    </div>
+
+    <!-- Mood -->
+    <div class="ci-section">
+      <h2>Mood</h2>
+      <p class="ci-section-desc">How would you rate your mood today?</p>
+      <div class="emoji-scale" id="moodScale">
+        {% set mood_emojis = ['😔','😕','😐','🙂','😊'] %}
+        {% set mood_labels = ['Terrible','Not great','Okay','Good','Great'] %}
+        {% for i in range(1, 6) %}
+        <label class="scale-option {% if existing and existing.mood == i %}selected{% endif %}">
+          <input type="radio" name="mood" value="{{ i }}" required
+                 {% if existing and existing.mood == i %}checked{% endif %}/>
+          <span class="scale-emoji">{{ mood_emojis[i-1] }}</span>
+          <span class="scale-label">{{ mood_labels[i-1] }}</span>
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Energy -->
+    <div class="ci-section">
+      <h2>Energy Level</h2>
+      <p class="ci-section-desc">How energized do you feel?</p>
+      <div class="emoji-scale" id="energyScale">
+        {% set energy_emojis = ['🪫','😴','⚡','🔋','⚡⚡'] %}
+        {% set energy_labels = ['Depleted','Low','Medium','High','Energized'] %}
+        {% for i in range(1, 6) %}
+        <label class="scale-option energy-opt {% if existing and existing.energy == i %}selected{% endif %}">
+          <input type="radio" name="energy" value="{{ i }}" required
+                 {% if existing and existing.energy == i %}checked{% endif %}/>
+          <span class="scale-emoji">{{ energy_emojis[i-1] }}</span>
+          <span class="scale-label">{{ energy_labels[i-1] }}</span>
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Pain -->
+    <div class="ci-section">
+      <h2>Pain / Discomfort</h2>
+      <p class="ci-section-desc">Any physical discomfort today? (0 = none)</p>
+      <div class="pain-scale">
+        {% for i in range(0, 6) %}
+        <label class="pain-option {% if existing and existing.pain_level == i %}selected{% endif %}">
+          <input type="radio" name="pain_level" value="{{ i }}"
+                 {% if (not existing and i == 0) or (existing and existing.pain_level == i) %}checked{% endif %}/>
+          <span class="pain-num">{{ i }}</span>
+        </label>
+        {% endfor %}
+      </div>
+      <div class="pain-labels">
+        <span>No pain</span><span style="flex:1"></span><span>Severe</span>
+      </div>
+    </div>
+
+    <!-- Symptoms -->
+    <div class="ci-section">
+      <h2>Symptoms Today</h2>
+      <p class="ci-section-desc">Select any that apply</p>
+      <div class="symptom-checkboxes">
+        {% set symptoms_list = ['Cramps', 'Bloating', 'Headache', 'Fatigue', 'Mood swings',
+                                'Back pain', 'Breast tenderness', 'Acne', 'Nausea', 'Cravings',
+                                'Insomnia', 'Spotting', 'Anxiety', 'Hot flashes', 'None'] %}
+        {% for sym in symptoms_list %}
+        <label class="symptom-chip">
+          <input type="checkbox" name="symptoms" value="{{ sym }}"
+                 {% if existing and existing.symptoms and sym in existing.symptoms %}checked{% endif %}/>
+          <span>{{ sym }}</span>
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Notes -->
+    <div class="ci-section">
+      <h2>Journal Note <span class="ci-optional">optional</span></h2>
+      <textarea name="notes" class="bloom-input ci-notes" rows="4"
+                placeholder="How are you really feeling? Anything notable today?">{{ existing.notes if existing and existing.notes else '' }}</textarea>
+    </div>
+
+    <div class="ci-submit">
+      <button type="submit" class="bloom-btn bloom-btn-primary bloom-btn-lg">
+        {% if existing %}Update Check-in{% else %}Save Check-in{% endif %} ♡
+      </button>
+      <a href="{{ url_for('dashboard') }}" class="bloom-btn bloom-btn-ghost">Cancel</a>
+    </div>
+  </form>
+
+  {% if recent_checkins %}
+  <div class="recent-checkins">
+    <h2>Recent Check-ins</h2>
+    <div class="recent-list">
+      {% for rc in recent_checkins %}
+      <div class="recent-item">
+        <span class="rc-date">{{ rc.checkin_date.strftime('%b %-d') }}</span>
+        <div class="rc-dots">
+          {% set mood_emojis = {1:'😔',2:'😕',3:'😐',4:'🙂',5:'😊'} %}
+          <span title="Mood">{{ mood_emojis.get(rc.mood, '?') }}</span>
+        </div>
+        {% if rc.symptoms %}
+          <span class="rc-symptoms">{{ rc.symptoms | join(', ') if rc.symptoms else '' }}</span>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+document.querySelectorAll('.emoji-scale input').forEach(radio => {
+  radio.addEventListener('change', function() {
+    this.closest('.emoji-scale').querySelectorAll('.scale-option').forEach(opt => opt.classList.remove('selected'));
+    this.closest('.scale-option').classList.add('selected');
+  });
+});
+document.querySelectorAll('.pain-option input').forEach(radio => {
+  radio.addEventListener('change', function() {
+    document.querySelectorAll('.pain-option').forEach(opt => opt.classList.remove('selected'));
+    this.closest('.pain-option').classList.add('selected');
+  });
+});
+</script>
+{% endblock %}

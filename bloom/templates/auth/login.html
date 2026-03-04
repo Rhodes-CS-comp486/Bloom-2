@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bloom – Sign In</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+</head>
+<body class="auth-body">
+  <div class="auth-container">
+    <div class="auth-art">
+      <div class="auth-art-inner">
+        <div class="floating-petals">
+          <span class="petal p1">✿</span>
+          <span class="petal p2">❀</span>
+          <span class="petal p3">✾</span>
+          <span class="petal p4">✿</span>
+          <span class="petal p5">❀</span>
+          <span class="petal p6">✾</span>
+          <span class="petal p7">✿</span>
+        </div>
+        <div class="auth-garden-art">
+          <svg viewBox="0 0 300 320" class="auth-svg">
+            <!-- Ground -->
+            <ellipse cx="150" cy="285" rx="130" ry="18" fill="#c8a882" opacity="0.3"/>
+            <!-- Stems -->
+            <line x1="90" y1="280" x2="90" y2="180" stroke="#6b8f6b" stroke-width="3"/>
+            <line x1="150" y1="280" x2="150" y2="120" stroke="#6b8f6b" stroke-width="3.5"/>
+            <line x1="210" y1="280" x2="210" y2="170" stroke="#6b8f6b" stroke-width="3"/>
+            <line x1="60" y1="280" x2="55" y2="210" stroke="#6b8f6b" stroke-width="2"/>
+            <line x1="240" y1="280" x2="245" y2="200" stroke="#6b8f6b" stroke-width="2"/>
+            <!-- Leaves -->
+            <ellipse cx="105" cy="230" rx="22" ry="10" fill="#86b49c" transform="rotate(-30 105 230)"/>
+            <ellipse cx="165" cy="195" rx="25" ry="11" fill="#86b49c" transform="rotate(25 165 195)"/>
+            <ellipse cx="195" cy="225" rx="20" ry="9" fill="#86b49c" transform="rotate(-20 195 225)"/>
+            <!-- Big center flower (rose) -->
+            <circle cx="150" cy="110" r="40" fill="#e8a598" opacity="0.3"/>
+            <circle cx="150" cy="110" r="30" fill="#e8a598" opacity="0.5"/>
+            <circle cx="150" cy="110" r="20" fill="#e8a598"/>
+            <circle cx="150" cy="110" r="10" fill="#c97060"/>
+            <!-- Petals -->
+            <ellipse cx="150" cy="75" rx="12" ry="20" fill="#f0bdb0" opacity="0.8"/>
+            <ellipse cx="150" cy="145" rx="12" ry="20" fill="#f0bdb0" opacity="0.8"/>
+            <ellipse cx="115" cy="110" rx="20" ry="12" fill="#f0bdb0" opacity="0.8"/>
+            <ellipse cx="185" cy="110" rx="20" ry="12" fill="#f0bdb0" opacity="0.8"/>
+            <ellipse cx="122" cy="82" rx="12" ry="20" fill="#f0bdb0" opacity="0.7" transform="rotate(-45 122 82)"/>
+            <ellipse cx="178" cy="82" rx="12" ry="20" fill="#f0bdb0" opacity="0.7" transform="rotate(45 178 82)"/>
+            <ellipse cx="122" cy="138" rx="12" ry="20" fill="#f0bdb0" opacity="0.7" transform="rotate(45 122 138)"/>
+            <ellipse cx="178" cy="138" rx="12" ry="20" fill="#f0bdb0" opacity="0.7" transform="rotate(-45 178 138)"/>
+            <!-- Left flower (daisy) -->
+            <circle cx="90" cy="170" r="8" fill="#f5e6a0"/>
+            <ellipse cx="90" cy="153" rx="5" ry="11" fill="white" opacity="0.9"/>
+            <ellipse cx="90" cy="187" rx="5" ry="11" fill="white" opacity="0.9"/>
+            <ellipse cx="73" cy="170" rx="11" ry="5" fill="white" opacity="0.9"/>
+            <ellipse cx="107" cy="170" rx="11" ry="5" fill="white" opacity="0.9"/>
+            <!-- Right flower (lavender) -->
+            <ellipse cx="210" cy="155" rx="10" ry="25" fill="#c5b8e8" opacity="0.8"/>
+            <ellipse cx="203" cy="158" rx="7" ry="18" fill="#b0a0d8" opacity="0.9"/>
+            <ellipse cx="217" cy="158" rx="7" ry="18" fill="#b0a0d8" opacity="0.9"/>
+            <!-- Small sprouts -->
+            <path d="M55 210 Q45 195 55 185 Q65 195 55 210" fill="#86b49c"/>
+            <path d="M245 200 Q255 185 245 175 Q235 185 245 200" fill="#86b49c"/>
+          </svg>
+        </div>
+        <div class="auth-tagline">
+          <h2>Your cycle,<br/><em>beautifully understood.</em></h2>
+          <p>Track. Bloom. Thrive.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="auth-form-panel">
+      <div class="auth-form-inner">
+        <div class="auth-logo">
+          <span class="logo-icon">✿</span>
+          <span class="logo-text">bloom</span>
+        </div>
+        <h1 class="auth-title">Welcome back</h1>
+        <p class="auth-subtitle">Step into your garden</p>
+
+        {% if error %}
+          <div class="auth-error">{{ error }}</div>
+        {% endif %}
+
+        <form method="POST" class="bloom-form">
+          <div class="form-group">
+            <label for="identifier">Email or Username</label>
+            <input type="text" id="identifier" name="identifier" class="bloom-input"
+                   placeholder="your@email.com" required autocomplete="username"/>
+          </div>
+          <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" class="bloom-input"
+                   placeholder="••••••••" required autocomplete="current-password"/>
+          </div>
+          <button type="submit" class="bloom-btn bloom-btn-primary">Sign In</button>
+        </form>
+
+        <p class="auth-switch">
+          New to Bloom? <a href="{{ url_for('register') }}">Create your garden →</a>
+        </p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

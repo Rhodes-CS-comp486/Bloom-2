@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}Bloom – Settings{% endblock %}
+
+{% block content %}
+<div class="settings-page">
+  <div class="settings-header">
+    <h1>Settings <em>⚙</em></h1>
+    <p>Update your cycle details and profile.</p>
+  </div>
+
+  <form method="POST" class="settings-form">
+    <div class="form-section">
+      <div class="section-header">
+        <span class="section-num">01</span>
+        <div>
+          <h2 class="section-title">Profile</h2>
+          <p class="section-desc">Your personal information</p>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>First Name</label>
+          <input type="text" name="first_name" class="bloom-input" value="{{ user.first_name or '' }}"/>
+        </div>
+        <div class="form-group">
+          <label>Last Name</label>
+          <input type="text" name="last_name" class="bloom-input" value="{{ user.last_name or '' }}"/>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Username</label>
+        <input type="text" class="bloom-input" value="{{ user.username }}" readonly style="opacity:0.6"/>
+        <span class="field-hint">Username cannot be changed</span>
+      </div>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" class="bloom-input" value="{{ user.email }}" readonly style="opacity:0.6"/>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="section-header">
+        <span class="section-num">02</span>
+        <div>
+          <h2 class="section-title">Cycle Settings</h2>
+          <p class="section-desc">Keep these accurate for better predictions</p>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Average Cycle Length (days)</label>
+          <input type="number" name="cycle_length" class="bloom-input" min="21" max="45"
+                 value="{{ user.cycle_length or 28 }}"/>
+        </div>
+        <div class="form-group">
+          <label>Average Period Length (days)</label>
+          <input type="number" name="period_length" class="bloom-input" min="1" max="10"
+                 value="{{ user.period_length or 5 }}"/>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>First Day of Last Period</label>
+        <input type="date" name="last_period_date" class="bloom-input"
+               value="{{ user.last_period_date or '' }}"/>
+      </div>
+      <div class="form-group">
+        <label>Typical Symptoms</label>
+        <div class="symptom-checkboxes">
+          {% set all_symptoms = ['Cramps', 'Bloating', 'Headache', 'Fatigue', 'Mood swings',
+                                 'Back pain', 'Breast tenderness', 'Acne', 'Nausea', 'Cravings'] %}
+          {% for sym in all_symptoms %}
+          <label class="symptom-chip">
+            <input type="checkbox" name="symptom_check" value="{{ sym }}"
+                   {% if user.typical_symptoms and sym in user.typical_symptoms %}checked{% endif %}/>
+            <span>{{ sym }}</span>
+          </label>
+          {% endfor %}
+        </div>
+        <input type="hidden" id="typical_symptoms" name="typical_symptoms"
+               value="{{ user.typical_symptoms | join(', ') if user.typical_symptoms else '' }}"/>
+      </div>
+      <div class="form-group">
+        <label>Contraceptive Method</label>
+        <select name="contraceptive_method" class="bloom-input bloom-select">
+          <option value="">Prefer not to say / None</option>
+          {% for val, label in [('pill','Birth control pill'),('iud_hormonal','Hormonal IUD'),
+                                ('iud_copper','Copper IUD'),('implant','Implant'),
+                                ('patch','Patch'),('ring','Ring'),('condoms','Condoms'),('other','Other')] %}
+          <option value="{{ val }}" {% if user.contraceptive_method == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="toggle-label">
+          <input type="checkbox" name="trying_to_conceive" class="toggle-checkbox"
+                 {% if user.trying_to_conceive %}checked{% endif %}/>
+          <span class="toggle-slider"></span>
+          <span>I am trying to conceive</span>
+        </label>
+      </div>
+    </div>
+
+    <div class="settings-actions">
+      <button type="submit" class="bloom-btn bloom-btn-primary">Save Settings 🌿</button>
+    </div>
+  </form>
+
+  <!-- Period History -->
+  {% if recent_periods %}
+  <div class="period-history">
+    <h2>Recent Period History</h2>
+    <div class="period-table">
+      <div class="pt-header">
+        <span>Start</span><span>End</span><span>Flow</span><span>Notes</span><span></span>
+      </div>
+      {% for p in recent_periods %}
+      <div class="pt-row">
+        <span>{{ p.start_date.strftime('%b %-d, %Y') }}</span>
+        <span>{{ p.end_date.strftime('%b %-d') if p.end_date else '—' }}</span>
+        <span class="flow-badge flow-{{ p.flow_intensity or 'medium' }}">{{ p.flow_intensity or '—' }}</span>
+        <span class="pt-notes">{{ p.notes or '—' }}</span>
+        <form action="{{ url_for('delete_period', period_id=p.id) }}" method="POST"
+              onsubmit="return confirm('Delete this period log?')" style="display:inline">
+          <button type="submit" class="pt-delete">✕</button>
+        </form>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Danger Zone -->
+  <div class="danger-zone">
+    <h2>Account</h2>
+    <a href="{{ url_for('logout') }}" class="bloom-btn bloom-btn-danger">Sign Out</a>
+  </div>
+</div>
+
+<script>
+function syncSymptoms() {
+  const checked = Array.from(document.querySelectorAll('input[name="symptom_check"]:checked'))
+    .map(cb => cb.value);
+  document.getElementById('typical_symptoms').value = checked.join(', ');
+}
+document.querySelectorAll('input[name="symptom_check"]').forEach(cb => cb.addEventListener('change', syncSymptoms));
+</script>
+{% endblock %}
