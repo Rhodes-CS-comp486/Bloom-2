@@ -818,6 +818,91 @@ em { font-style: italic; color: var(--rose); }
 .habit-toggle-btn.toggled { opacity: 1; }
 .habit-toggle-btn:hover { opacity: 1; transform: scale(1.03); }
 
+/* ── Suggestion Card ───────────────────────────────────────────── */
+.suggestion-card {
+  background: var(--white);
+  border-radius: var(--radius);
+  padding: 1.5rem 1.75rem;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 600px;
+  margin: 0 auto 1.5rem auto;
+  border-left: 4px solid var(--white);
+  animation: fadeIn 0.35s ease-out;
+}
+
+.suggestion-card.hidden {
+  display: none;
+}
+
+.sug-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.sug-icon {
+  font-size: 1.5rem;
+}
+
+.sug-title {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.sug-message {
+  font-size: 0.95rem;
+  color: var(--ink-soft);
+  line-height: 1.45;
+}
+
+.sug-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.sug-btn {
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius);
+  border: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+}
+
+.sug-btn.accept {
+  background: var(--sage);
+  color: var(--white);
+}
+.sug-btn.accept:hover {
+  background: var(--sage-dark);
+}
+
+.sug-btn.modify {
+  background: var(--cream-dark);
+  color: var(--ink);
+}
+.sug-btn.modify:hover {
+  background: var(--cream);
+}
+
+.sug-btn.dismiss {
+  background: none;
+  color: var(--ink-soft);
+}
+.sug-btn.dismiss:hover {
+  color: var(--rose);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .add-habit-card {
   display: flex;
   flex-direction: column;

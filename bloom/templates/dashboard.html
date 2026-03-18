@@ -169,6 +169,54 @@
         <p class="empty-state">No habits yet. <a href="{{ url_for('habits') }}">Add some →</a></p>
       {% endif %}
     </div>
+      <!-- Suggestions -->
+
+<!-- your dashboard content -->
+      <div id="suggestion-card" class="suggestion-card hidden">
+    <div class="sug-header">
+
+        <h3 class="sug-title">Recommendation</h3>
+    </div>
+
+    <p class="sug-message"></p>
+
+    <div class="sug-actions">
+        <button class="sug-btn accept" onclick="acceptSuggestion()">Accept</button>
+        <button class="sug-btn modify" onclick="modifySuggestion()">Modify</button>
+        <button class="sug-btn dismiss" onclick="dismissSuggestion()">Dismiss</button>
+    </div>
+</div>
+
+<!-- Inline JS goes inside the same block -->
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    fetch("/api/suggestions")
+        .then(res => res.json())
+        .then(data => {
+            document.querySelector(".sug-title").innerText = data.title;
+            document.querySelector(".sug-message").innerText = data.message;
+            document.getElementById("suggestion-card").classList.remove("hidden");
+        });
+});
+
+function dismissSuggestion() {
+    document.getElementById("suggestion-card").classList.add("hidden");
+}
+
+function acceptSuggestion() {
+    alert("Suggestion accepted.");
+}
+
+function modifySuggestion() {
+    alert("You can now modify this suggestion.");
+}
+</script>
+
+
+
+
+
+
 
     <!-- Log Period -->
     <div class="dash-card period-log-card">

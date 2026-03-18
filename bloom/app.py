@@ -11,7 +11,12 @@ import math
 
 load_dotenv()
 
-app = Flask(__name__)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+app = Flask(
+    __name__,
+    template_folder=os.path.join(BASE_DIR, "templates"),
+    static_folder=os.path.join(BASE_DIR, "static"),
+)
 app.secret_key = os.getenv('SECRET_KEY', 'bloom-dev-secret')
 
 # ── DB helper ──────────────────────────────────────────────────────────────────
@@ -748,6 +753,115 @@ def settings():
     cur.close(); conn.close()
 
     return render_template('settings.html', user=user, recent_periods=recent_periods)
+# ── Suggestions ─────────────────────────────────────────────────────────────────
+@app.route('/api/suggestions')
+@login_required
+def api_suggestions():
+    user_id = session['user_id']
+    suggestion = generate_suggestion_for_user(user_id)
+    return jsonify(suggestion)
+
+
+def generate_suggestion_for_user(user_id):
+    conn = get_db()
+    cur = conn.cursor()
+
+    # Recent checkins (last 7 days)
+    cur.execute("""
+        SELECT mood, energy, pain_level, symptoms, notes, checkin_date
+        FROM checkins
+        WHERE user_id=%s
+        ORDER BY checkin_date DESC
+        LIMIT 7
+    """, (user_id,))
+    checkins = cur.fetchall()
+
+    # Recent habit logs (last 7 days)
+    cur.execute("""
+        SELECT completed
+        FROM habit_logs
+        WHERE user_id=%s AND log_date >= %s
+    """, (user_id, date.today() - timedelta(days=7)))
+    habit_logs = cur.fetchall()
+
+    # User info (cycle, last period)
+    cur.execute("SELECT * FROM users WHERE id=%s", (user_id,))
+    user = cur.fetchone()
+
+    cur.close()
+    conn.close()
+
+    # Build suggestion object
+    suggestion = {
+        "title": "Recommendation",
+        "message": "",
+        "category": "",
+        "dismissible": True,
+        "actions": ["accept", "modify", "ignore"]
+    }
+
+    # --- Habit pattern suggestion ---
+    if habit_logs:
+        completion_rate = sum(1 for h in habit_logs if h['completed']) / len(habit_logs)
+        if completion_rate < 0.4:
+            suggestion["category"] = "Habits"
+            suggestion["message"] = (
+                "It looks like the past week has been full. "
+                "If you'd like, you could focus on just one small habit today. "
+                "Gentle consistency can support your overall well‑being."
+            )
+            return suggestion
+
+    # --- Emotional check‑in suggestion ---
+    if checkins:
+        last = checkins[0]
+        if last['mood'] <= 2:
+            suggestion["category"] = "Emotional Well‑Being"
+            suggestion["message"] = (
+                "Your recent check‑ins show some lower moods. "
+                "A grounding activity or a few minutes of rest might help, "
+                "if that feels right for you."
+            )
+            return suggestion
+
+        if last['energy'] <= 2:
+            suggestion["category"] = "Energy"
+            suggestion["message"] = (
+                "You've noted lower energy recently. "
+                "A gentle, restorative activity could support you today."
+            )
+            return suggestion
+
+        if last['pain_level'] >= 6:
+            suggestion["category"] = "Comfort"
+            suggestion["message"] = (
+                "You've logged higher discomfort. "
+                "If you'd like, you could try a warm compress or light stretching. "
+                "Only if it feels supportive."
+            )
+            return suggestion
+
+    # --- Cycle-based suggestion ---
+    next_start, _ = predict_next_period(user)
+    if next_start:
+        days_until = (next_start - date.today()).days
+        if 0 <= days_until <= 3:
+            suggestion["category"] = "Cycle Awareness"
+            suggestion["message"] = (
+                "Your next period may be approaching soon. "
+                "You might consider preparing comfort items or planning a lighter day, "
+                "if that feels helpful."
+            )
+            return suggestion
+
+    # --- Default suggestion ---
+    suggestion["category"] = "General Wellness"
+    suggestion["message"] = (
+        "You're doing a wonderful job staying connected with your habits and cycle. "
+        "If you'd like, you can explore a new gentle wellness activity this week."
+    )
+
+    return suggestion
 
 # ── Run ───────────────────────────────────────────────────────────────────────
 

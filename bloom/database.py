@@ -105,10 +105,30 @@ def init_db():
         );
     """)
 
-    conn.commit()
-    cur.close()
-    conn.close()
-    print("✅ Database initialized successfully.")
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS suggestions (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+
+            -- Suggestion content
+            title VARCHAR(100) NOT NULL DEFAULT 'Recommendation',
+            message TEXT NOT NULL,
+            category VARCHAR(50),
+
+            -- Status tracking
+            status VARCHAR(20) NOT NULL DEFAULT 'unread'
+                CHECK (status IN ('unread', 'accepted', 'modified', 'dismissed')),
+
+            -- Optional user-modified text
+            modified_message TEXT,
+
+            -- Metadata
+            dismissible BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT NOW(),
+            responded_at TIMESTAMP
+        );
+    """)
+
 
 if __name__ == "__main__":
     init_db()
