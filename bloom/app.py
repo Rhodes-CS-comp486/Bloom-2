@@ -863,6 +863,187 @@ def generate_suggestion_for_user(user_id):
 
     return suggestion
 
+# ── Emotional Patterns ─────────────────────────────────────────────────────────────────
+@app.route('/api/emotional-patterns')
+@login_required
+def emotional_patterns():
+    user_id = session['user_id']
+    insight = generate_emotional_pattern(user_id)
+    return jsonify(insight)
+def generate_emotional_pattern(user_id):
+    conn = get_db()
+    cur = conn.cursor()
+
+    # Get last 30 days of checkins
+    cur.execute("""
+        SELECT mood, energy, pain_level, checkin_date
+        FROM checkins
+        WHERE user_id=%s AND checkin_date >= %s
+        ORDER BY checkin_date DESC
+    """, (user_id, date.today() - timedelta(days=30)))
+    rows = cur.fetchall()
+
+    cur.close(); conn.close()
+
+    if len(rows) < 5:
+        return {
+            "title": "Emotional Pattern",
+            "message": "As you continue checking in, Bloom will help you notice gentle emotional patterns over time."
+        }
+
+    # Average mood by week
+    moods = [r['mood'] for r in rows]
+    avg_mood = sum(moods) / len(moods)
+
+    # Simple insight examples
+    if avg_mood <= 2.5:
+        return {
+            "title": "Emotional Pattern",
+            "message": "Your recent check‑ins show a trend toward lower moods. You might consider adding a grounding or comforting activity this week."
+        }
+
+    if avg_mood >= 4:
+        return {
+            "title": "Emotional Pattern",
+            "message": "You've logged brighter moods recently. This could be a lovely time to nurture creativity or connection."
+        }
+
+    return {
+        "title": "Emotional Pattern",
+        "message": "Your emotional patterns this month show a gentle balance. Staying aware of your feelings can help you stay grounded."
+    }
+@app.route('/api/save-insight', methods=['POST'])
+@login_required
+def save_insight():
+    user_id = session['user_id']
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("INSERT INTO emotional_insights (user_id, saved_at) VALUES (%s, NOW())", (user_id,))
+    conn.commit()
+    cur.close(); conn.close()
+    return jsonify({"status": "saved"})
+
+@app.route('/emotional-patterns')
+@login_required
+def emotional_patterns_page():
+    user_id = session['user_id']
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT mood, energy, pain_level, checkin_date
+        FROM checkins
+        WHERE user_id=%s AND checkin_date >= %s
+        ORDER BY checkin_date ASC
+    """, (user_id, date.today() - timedelta(days=90)))
+
+    rows = cur.fetchall()
+    cur.close();
+    conn.close()
+
+    # FIXED: use dict keys instead of tuple indexes
+    data = [
+        {
+            "mood": r["mood"],
+            "energy": r["energy"],
+            "pain": r["pain_level"],
+            "date": r["checkin_date"]
+        }
+        for r in rows
+    ]
+
+    # ------------------------------
+    # 1. WEEKLY EMOTIONAL RHYTHM
+    # ------------------------------
+    weekly = {i: [] for i in range(7)}  # 0=Mon
+    for entry in data:
+        weekday = entry["date"].weekday()
+        weekly[weekday].append(entry["mood"])
+
+    weekly_avg = [
+        round(sum(vals)/len(vals), 2) if vals else None
+        for vals in weekly.values()
+    ]
+
+    # ------------------------------
+    # 2. MOOD–ENERGY CORRELATION
+    # ------------------------------
+    moods = [d["mood"] for d in data]
+    energies = [d["energy"] for d in data]
+
+    if len(moods) > 1:
+        import numpy as np
+        correlation = float(np.corrcoef(moods, energies)[0][1])
+    else:
+        correlation = None
+
+    # ------------------------------
+    # 3. PERIOD‑RELATED EMOTIONAL PATTERNS
+    # ------------------------------
+    # Pull period logs
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT start_date, end_date
+        FROM periods
+        WHERE user_id=%s
+        ORDER BY start_date DESC
+        LIMIT 3
+    """, (user_id,))
+    periods = cur.fetchall()
+    cur.close(); conn.close()
+
+    period_curve = {"-3": [], "-2": [], "-1": [], "0": [], "+1": [], "+2": [], "+3": []}
+
+    for entry in data:
+        for start, end in periods:
+            delta = (entry["date"] - start).days
+            if -3 <= delta <= 3:
+                key = str(delta)
+                period_curve[key].append(entry["mood"])
+
+    period_avg = {
+        k: (round(sum(v)/len(v), 2) if v else None)
+        for k, v in period_curve.items()
+    }
+
+    # ------------------------------
+    # 4. CYCLE PHASE EMOTIONS
+    # ------------------------------
+    # Simple phase classifier
+    def get_phase(day):
+        if 0 <= day <= 5:
+            return "menstrual"
+        if 6 <= day <= 13:
+            return "follicular"
+        if 14 <= day <= 16:
+            return "ovulation"
+        return "luteal"
+
+    phase_map = {"menstrual": [], "follicular": [], "ovulation": [], "luteal": []}
+
+    for entry in data:
+        for start, end in periods:
+            cycle_day = (entry["date"] - start).days
+            if 0 <= cycle_day <= 28:
+                phase = get_phase(cycle_day)
+                phase_map[phase].append(entry["mood"])
+
+    phase_avg = {
+        phase: (round(sum(vals)/len(vals), 2) if vals else None)
+        for phase, vals in phase_map.items()
+    }
+
+    return render_template(
+        "emotional_patterns.html",
+        weekly_avg=weekly_avg,
+        correlation=correlation,
+        period_avg=period_avg,
+        phase_avg=phase_avg,
+        data=data
+    )
+
 # ── Run ───────────────────────────────────────────────────────────────────────
 
 with app.app_context():
