@@ -269,7 +269,7 @@ async function toggleHabit(habitId, btn) {
 }
 
 document.addEventListener("DOMContentLoaded", function () {
-    const today = new Date().toISOString().split("T")[0];
+    const today = Date.now() + 60 * 1000;
 
     /* ------------------------------
        EMOTIONAL PATTERNS (dismiss until tomorrow)
@@ -307,7 +307,7 @@ document.addEventListener("DOMContentLoaded", function () {
    DISMISS EMOTIONAL PATTERN
 ------------------------------ */
 function dismissInsight() {
-    const today = new Date().toISOString().split("T")[0];
+    const today = Date.now() + 60 * 1000;
     localStorage.setItem("dismissInsightDate", today);
     document.getElementById("emotional-patterns-card").classList.add("hidden");
 }
@@ -324,7 +324,7 @@ function saveInsight() {
    DISMISS SUGGESTION
 ------------------------------ */
 function dismissSuggestion() {
-    const today = new Date().toISOString().split("T")[0];
+    const today = Date.now() + 60 * 1000;
 
     localStorage.setItem("dismissSuggestionDate", today);
     document.getElementById("suggestion-card").classList.add("hidden");
