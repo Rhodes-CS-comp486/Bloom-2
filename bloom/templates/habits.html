@@ -10,54 +10,86 @@
 
   <!-- Today's Progress -->
   {% if habits %}
+  {% set active_habits = habits | rejectattr('paused') | list %}
   {% set completed_today = habit_status.values() | list | select | list | length %}
   <div class="habits-progress-card">
     <div class="hp-left">
-      <span class="hp-num">{{ completed_today }}/{{ habits | length }}</span>
+      <span class="hp-num">{{ completed_today }}/{{ active_habits | length }}</span>
       <span class="hp-label">habits done today</span>
     </div>
     <div class="hp-bar-wrap">
       <div class="hp-bar">
-        <div class="hp-fill" style="width: {{ (completed_today / habits|length * 100) | int if habits else 0 }}%"></div>
+        <div class="hp-fill" style="width: {{ (completed_today / active_habits|length * 100) | int if active_habits else 0 }}%"></div>
       </div>
-      {% if completed_today == habits | length %}
+      {% if active_habits and completed_today == active_habits | length %}
         <span class="hp-complete">✿ All done! Amazing!</span>
       {% endif %}
     </div>
   </div>
   {% endif %}
 
-  <!-- Habit List -->
+  <!-- Suggestion Banner (shown after clicking Get a Suggestion) -->
+  <div class="suggestion-banner" id="suggestionBanner" style="display:none;">
+    <span class="suggestion-icon">🌸</span>
+    <div class="suggestion-text">
+      <strong id="suggestionTitle"></strong>
+      <p id="suggestionMsg"></p>
+    </div>
+    <button class="suggestion-dismiss" onclick="dismissSuggestion()" aria-label="Dismiss">✕</button>
+  </div>
+
+  <!-- Action Row -->
+  <div class="habits-action-row">
+    <a href="{{ url_for('habit_library') }}" class="bloom-btn bloom-btn-ghost">🌿 Browse Habit Library</a>
+    <button class="bloom-btn bloom-btn-ghost" onclick="loadSuggestion()">✨ Get a Suggestion</button>
+  </div>
+
+  <!-- Habit Grid -->
   <div class="habit-grid">
     {% for habit in habits %}
     {% set done = habit_status.get(habit.id, False) %}
-    <div class="habit-card {% if done %}habit-done{% endif %}" id="hcard-{{ habit.id }}" style="--hc: {{ habit.color }}">
+    {% set is_paused = habit.paused %}
+    <div class="habit-card {% if done %}habit-done{% endif %} {% if is_paused %}habit-paused{% endif %}"
+         id="hcard-{{ habit.id }}" style="--hc: {{ habit.color }}">
       <div class="hcard-top">
-        <span class="hcard-icon">{{ habit.icon }}</span>
+        <span class="hcard-icon" style="{% if is_paused %}opacity:0.45;{% endif %}">{{ habit.icon }}</span>
         <div class="hcard-info">
-          <h3 class="hcard-name">{{ habit.name }}</h3>
+          <h3 class="hcard-name">
+            {{ habit.name }}
+            {% if is_paused %}<span class="paused-badge">Paused</span>{% endif %}
+          </h3>
           {% if habit.description %}<p class="hcard-desc">{{ habit.description }}</p>{% endif %}
         </div>
-        <form action="{{ url_for('delete_habit', habit_id=habit.id) }}" method="POST"
-              onsubmit="return confirm('Remove this habit?')">
-          <button type="submit" class="hcard-delete" title="Remove habit">✕</button>
-        </form>
+        <div class="hcard-controls">
+          <form action="{{ url_for('pause_habit', habit_id=habit.id) }}" method="POST">
+            <button type="submit" class="hcard-icon-btn"
+                    title="{% if is_paused %}Resume habit{% else %}Pause habit{% endif %}">
+              {% if is_paused %}▶{% else %}⏸{% endif %}
+            </button>
+          </form>
+          <form action="{{ url_for('delete_habit', habit_id=habit.id) }}" method="POST"
+                onsubmit="return confirm('Remove this habit?')">
+            <button type="submit" class="hcard-delete" title="Remove habit">✕</button>
+          </form>
+        </div>
       </div>
       <div class="hcard-bottom">
-        <!-- Week mini-chart -->
         <div class="week-chart">
-          {% set today_dow = today.weekday() %}
           {% for i in range(7) %}
             <div class="wc-day"></div>
           {% endfor %}
         </div>
         <div class="hcard-actions">
           <span class="week-stat">{{ week_stats.get(habit.id, 0) }}/7 this week</span>
-          <button class="habit-toggle-btn {% if done %}toggled{% endif %}"
-                  onclick="toggleHabit({{ habit.id }}, this)"
-                  style="background: {{ habit.color }}">
-            {% if done %}✓ Done{% else %}Mark Done{% endif %}
-          </button>
+          {% if is_paused %}
+            <button class="habit-toggle-btn paused-toggle" disabled>⏸ Paused</button>
+          {% else %}
+            <button class="habit-toggle-btn {% if done %}toggled{% endif %}"
+                    onclick="toggleHabit({{ habit.id }}, this)"
+                    style="background: {{ habit.color }}">
+              {% if done %}✓ Done{% else %}Mark Done{% endif %}
+            </button>
+          {% endif %}
         </div>
       </div>
     </div>
@@ -105,13 +137,117 @@
     </form>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+.habits-action-row {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.hcard-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.hcard-icon-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: #bbb;
+  padding: 3px 6px;
+  border-radius: 6px;
+  line-height: 1;
+  transition: color 0.2s, background 0.2s;
+}
+.hcard-icon-btn:hover {
+  color: #7a9e8e;
+  background: #f0f7f3;
+}
+
+.paused-badge {
+  display: inline-block;
+  font-size: 0.6rem;
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 500;
+  background: #ebebeb;
+  color: #999;
+  border-radius: 20px;
+  padding: 1px 7px;
+  margin-left: 6px;
+  vertical-align: middle;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.habit-card.habit-paused {
+  opacity: 0.6;
+  border: 1.5px dashed #ddd;
+}
+
+.paused-toggle {
+  background: #e8e8e8 !important;
+  color: #aaa !important;
+  cursor: not-allowed !important;
+}
+
+.suggestion-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  background: #faf5ff;
+  border-left: 3px solid #c5b8e8;
+  border-radius: 14px;
+  padding: 1rem 1.1rem;
+  margin-bottom: 1.25rem;
+}
+.suggestion-icon {
+  font-size: 1.4rem;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.suggestion-text { flex: 1; }
+.suggestion-text strong {
+  display: block;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #9b86c8;
+  margin-bottom: 0.25rem;
+}
+.suggestion-text p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #555;
+  line-height: 1.55;
+}
+.suggestion-dismiss {
+  background: none;
+  border: none;
+  color: #ccc;
+  cursor: pointer;
+  font-size: 0.95rem;
+  padding: 0;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.suggestion-dismiss:hover { color: #999; }
+</style>
 
 <script>
 async function toggleHabit(habitId, btn) {
   const today = '{{ today }}';
   const res = await fetch('/habits/toggle', {
     method: 'POST',
-    headers: {'Content-Type':'application/json'},
+    headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({habit_id: habitId, date: today})
   });
   const data = await res.json();
@@ -130,12 +266,34 @@ async function toggleHabit(habitId, btn) {
 function showAddForm() {
   document.getElementById('addHabitCard').style.display = 'none';
   document.getElementById('addHabitForm').style.display = 'block';
-  document.getElementById('addHabitForm').scrollIntoView({behavior:'smooth'});
+  document.getElementById('addHabitForm').scrollIntoView({behavior: 'smooth'});
 }
 
 function hideAddForm() {
   document.getElementById('addHabitCard').style.display = 'flex';
   document.getElementById('addHabitForm').style.display = 'none';
+}
+
+async function loadSuggestion() {
+  const banner = document.getElementById('suggestionBanner');
+  const title  = document.getElementById('suggestionTitle');
+  const msg    = document.getElementById('suggestionMsg');
+  title.textContent = 'Loading…';
+  msg.textContent   = '';
+  banner.style.display = 'flex';
+  try {
+    const res  = await fetch('/api/suggestions');
+    const data = await res.json();
+    title.textContent = data.category || 'Suggestion';
+    msg.textContent   = data.message  || '';
+  } catch (e) {
+    title.textContent = 'Suggestion';
+    msg.textContent   = 'Could not load a suggestion right now. Try again shortly.';
+  }
+}
+
+function dismissSuggestion() {
+  document.getElementById('suggestionBanner').style.display = 'none';
 }
 </script>
 {% endblock %}
