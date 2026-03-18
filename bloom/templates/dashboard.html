@@ -144,6 +144,26 @@
       {% endif %}
     </div>
 
+      <!-- Emotional Patterns-->
+      <div id="emotional-patterns-card" class="insight-card hidden">
+    <div class="insight-header">
+        <h3 class="insight-title">Emotional Pattern</h3>
+
+        <a href="{{ url_for('emotional_patterns_page') }}" class="view-pattern-link">
+            View Pattern →
+        </a>
+    </div>
+
+    <p class="insight-message"></p>
+
+    <div class="insight-actions">
+        <button class="insight-btn save" onclick="saveInsight()">Save</button>
+        <button class="insight-btn dismiss" onclick="dismissInsight()">Dismiss</button>
+    </div>
+</div>
+
+
+
     <!-- Habits -->
     <div class="dash-card habits-card">
       <div class="card-header">
@@ -187,36 +207,6 @@
     </div>
 </div>
 
-<!-- Inline JS goes inside the same block -->
-<script>
-document.addEventListener("DOMContentLoaded", function () {
-    fetch("/api/suggestions")
-        .then(res => res.json())
-        .then(data => {
-            document.querySelector(".sug-title").innerText = data.title;
-            document.querySelector(".sug-message").innerText = data.message;
-            document.getElementById("suggestion-card").classList.remove("hidden");
-        });
-});
-
-function dismissSuggestion() {
-    document.getElementById("suggestion-card").classList.add("hidden");
-}
-
-function acceptSuggestion() {
-    alert("Suggestion accepted.");
-}
-
-function modifySuggestion() {
-    alert("You can now modify this suggestion.");
-}
-</script>
-
-
-
-
-
-
 
     <!-- Log Period -->
     <div class="dash-card period-log-card">
@@ -255,7 +245,9 @@ function modifySuggestion() {
     </div>
   </div>
 </div>
+{% endblock %}
 
+{% block scripts %}
 <script>
 async function toggleHabit(habitId, btn) {
   const today = new Date().toISOString().split('T')[0];
@@ -276,6 +268,79 @@ async function toggleHabit(habitId, btn) {
   }
 }
 
+document.addEventListener("DOMContentLoaded", function () {
+    const today = new Date().toISOString().split("T")[0];
+
+    /* ------------------------------
+       EMOTIONAL PATTERNS (dismiss until tomorrow)
+    ------------------------------ */
+    const dismissedInsight = localStorage.getItem("dismissInsightDate");
+
+    if (dismissedInsight !== today) {
+        fetch("/api/emotional-patterns")
+            .then(res => res.json())
+            .then(data => {
+                if (!data || !data.message) return;
+                document.querySelector(".insight-title").innerText = data.title;
+                document.querySelector(".insight-message").innerText = data.message;
+                document.getElementById("emotional-patterns-card").classList.remove("hidden");
+            });
+    }
+
+    /* ------------------------------
+       SUGGESTIONS (dismiss until tomorrow)
+    ------------------------------ */
+    const dismissedSuggestion = localStorage.getItem("dismissSuggestionDate");
+
+    if (dismissedSuggestion !== today) {
+        fetch("/api/suggestions")
+            .then(res => res.json())
+            .then(data => {
+                document.querySelector(".sug-title").innerText = data.title;
+                document.querySelector(".sug-message").innerText = data.message;
+                document.getElementById("suggestion-card").classList.remove("hidden");
+            });
+    }
+});
+
+/* ------------------------------
+   DISMISS EMOTIONAL PATTERN
+------------------------------ */
+function dismissInsight() {
+    const today = new Date().toISOString().split("T")[0];
+    localStorage.setItem("dismissInsightDate", today);
+    document.getElementById("emotional-patterns-card").classList.add("hidden");
+}
+
+function saveInsight() {
+    fetch("/api/save-insight", { method: "POST" })
+        .then(() => {
+            alert("Insight saved.");
+            document.getElementById("emotional-patterns-card").classList.add("hidden");
+        });
+}
+
+/* ------------------------------
+   DISMISS SUGGESTION
+------------------------------ */
+function dismissSuggestion() {
+    const today = new Date().toISOString().split("T")[0];
+
+    localStorage.setItem("dismissSuggestionDate", today);
+    document.getElementById("suggestion-card").classList.add("hidden");
+}
+
+function acceptSuggestion() {
+    alert("Suggestion accepted.");
+}
+
+function modifySuggestion() {
+    alert("You can now modify this suggestion.");
+}
+
+/* ------------------------------
+   LOG PERIOD
+------------------------------ */
 async function logPeriod() {
   const start = document.getElementById('periodStart').value;
   const end = document.getElementById('periodEnd').value;

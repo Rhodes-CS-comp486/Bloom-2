@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+
+</body>
+</html>
+{% extends "base.html" %}
+{% block title %}Emotional Patterns{% endblock %}
+
+{% block content %}
+<div class="pattern-page">
+    <h1 class="page-title">Your Emotional Patterns</h1>
+    <p class="page-subtitle">A deeper look at your emotional rhythms</p>
+
+
+    <!-- Cycle Phase Patterns -->
+    <div class="pattern-card">
+        <h2> Cycle Phase Patterns</h2>
+        <canvas id="phaseChart"></canvas>
+    </div>
+
+    <!-- Weekly Emotional Rhythm -->
+    <div class="pattern-card">
+        <h2> Weekly Emotional Rhythms</h2>
+        <canvas id="weeklyChart"></canvas>
+    </div>
+
+    <!-- Mood & Energy Correlation -->
+    <div class="pattern-card">
+        <h2> Mood & Energy Correlation</h2>
+        <canvas id="correlationChart"></canvas>
+    </div>
+
+    <!-- Period-Related Emotional Patterns -->
+    <div class="pattern-card">
+        <h2> Period‑Related Emotional Patterns</h2>
+        <canvas id="periodChart"></canvas>
+    </div>
+</div>
+
+<style>
+.pattern-page {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2rem 1rem;
+}
+
+.page-title {
+    font-size: 2rem;
+    color: #c97060;
+    text-align: center;
+    margin-bottom: 0.3rem;
+}
+
+.page-subtitle {
+    text-align: center;
+    color: #666;
+    margin-bottom: 2rem;
+}
+
+/* NEW CARD STYLE */
+.pattern-card {
+    background: #ffffff;
+    border-radius: 14px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+    border: 1px solid #f1e8e4;
+}
+
+.pattern-card h2 {
+    color: #a85a4f;
+    margin-bottom: 1rem;
+    font-size: 1.2rem;
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+// Global animation style
+Chart.defaults.animation = {
+    duration: 1200,
+    easing: 'easeOutQuart'
+};
+
+// Data from Flask
+const weekly = {{ weekly_avg|tojson }};
+const correlation = {{ correlation|tojson }};
+const period = {{ period_avg|tojson }};
+const phase = {{ phase_avg|tojson }};
+
+// 1. Cycle Phase Chart
+new Chart(document.getElementById('phaseChart'), {
+    type: 'bar',
+    data: {
+        labels: ['Menstrual', 'Follicular', 'Ovulation', 'Luteal'],
+        datasets: [{
+            label: 'Average Mood',
+            data: [
+                phase.menstrual,
+                phase.follicular,
+                phase.ovulation,
+                phase.luteal
+            ],
+            backgroundColor: ['#e8b4bc','#f7d9c4','#f4c2c2','#d8a7b1']
+        }]
+    },
+    options: {
+        responsive: true,
+        animation: { duration: 1200, easing: 'easeOutQuart' },
+        scales: { y: { beginAtZero: true, max: 5 } }
+    }
+});
+
+// 2. Weekly Emotional Rhythm
+new Chart(document.getElementById('weeklyChart'), {
+    type: 'line',
+    data: {
+        labels: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
+        datasets: [{
+            label: 'Mood',
+            data: weekly,
+            borderColor: '#c97060',
+            backgroundColor: 'rgba(201,112,96,0.2)',
+            tension: 0.3,
+            fill: true
+        }]
+    },
+    options: {
+        responsive: true,
+        animation: { duration: 1500, easing: 'easeOutQuart' },
+        scales: { y: { beginAtZero: true, max: 5 } }
+    }
+});
+
+// 3. Mood–Energy Correlation
+new Chart(document.getElementById('correlationChart'), {
+    type: 'bar',
+    data: {
+        labels: ['Correlation'],
+        datasets: [{
+            label: 'Mood ↔ Energy',
+            data: [correlation],
+            backgroundColor: '#c97060'
+        }]
+    },
+    options: {
+        responsive: true,
+        animation: { duration: 1200, easing: 'easeOutQuart' },
+        scales: { y: { min: -1, max: 1 } }
+    }
+});
+
+// 4. Period‑Related Emotional Patterns
+new Chart(document.getElementById('periodChart'), {
+    type: 'line',
+    data: {
+        labels: ['-3','-2','-1','0','+1','+2','+3'],
+        datasets: [{
+            label: 'Mood',
+            data: [
+                period["-3"], period["-2"], period["-1"],
+                period["0"],
+                period["+1"], period["+2"], period["+3"]
+            ],
+            borderColor: '#a85a4f',
+            backgroundColor: 'rgba(168,90,79,0.2)',
+            tension: 0.3,
+            fill: true
+        }]
+    },
+    options: {
+        responsive: true,
+        animation: { duration: 1500, easing: 'easeOutQuart' },
+        scales: { y: { beginAtZero: true, max: 5 } }
+    }
+});
+</script>
+{% endblock %}
