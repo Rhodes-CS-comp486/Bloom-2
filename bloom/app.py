@@ -1134,7 +1134,7 @@ def emotional_patterns_page():
                 start = date.fromisoformat(start)
             delta = (entry["date"] - start).days
             if -3 <= delta <= 3:
-                key = str(delta)
+                key = f"+{delta}" if delta > 0 else str(delta)
                 period_curve[key].append(entry["mood"])
 
     period_avg = {
