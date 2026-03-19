@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}Habit Library – Bloom{% endblock %}
+
+{% block content %}
+<div class="habits-page">
+
+  <div class="habits-header">
+    <h1>Habit Library <em>🌿</em></h1>
+    <p>Browse pre-built habits and add them to your routine.</p>
+    <a href="{{ url_for('habits') }}" class="bloom-btn bloom-btn-ghost" style="margin-top:0.5rem; display:inline-block;">← Back to My Habits</a>
+  </div>
+
+  {# Group by category #}
+  {% set categories = library | map(attribute='category') | unique | list %}
+
+  {% for category in categories %}
+    <div class="library-section">
+      <h2 class="library-category-title">{{ category }}</h2>
+      <div class="library-grid">
+        {% for habit in library if habit.category == category %}
+          {% set already = habit.name in existing_names %}
+          <div class="library-card" style="--hc: {{ habit.color }}">
+            <div class="library-card-top">
+              <span class="library-icon">{{ habit.icon }}</span>
+              <div class="library-info">
+                <h3 class="library-name">{{ habit.name }}</h3>
+                <p class="library-desc">{{ habit.description }}</p>
+              </div>
+            </div>
+            <div class="library-card-bottom">
+              {% if already %}
+                <button class="bloom-btn bloom-btn-ghost" disabled style="opacity:0.5; cursor:not-allowed; width:100%;">
+                  ✓ Already Added
+                </button>
+              {% else %}
+                <form method="POST" action="{{ url_for('add_from_library') }}">
+                  <input type="hidden" name="name" value="{{ habit.name }}">
+                  <input type="hidden" name="description" value="{{ habit.description }}">
+                  <input type="hidden" name="color" value="{{ habit.color }}">
+                  <input type="hidden" name="icon" value="{{ habit.icon }}">
+                  <button type="submit" class="library-add-btn" style="background: {{ habit.color }};">
+                    + Add to My Habits
+                  </button>
+                </form>
+              {% endif %}
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endfor %}
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+.library-section { margin-bottom: 2.5rem; }
+
+.library-category-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.3rem;
+  font-weight: 400;
+  color: #7a9e8e;
+  margin-bottom: 1rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid #eee;
+}
+
+.library-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 1rem;
+}
+
+.library-card {
+  background: white;
+  border-radius: 16px;
+  padding: 1.1rem 1.1rem 0.9rem;
+  border: 1.5px solid #f0f0f0;
+  border-top: 3px solid var(--hc, #86b49c);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  transition: box-shadow 0.2s, transform 0.2s;
+}
+.library-card:hover {
+  box-shadow: 0 4px 18px rgba(0,0,0,0.07);
+  transform: translateY(-1px);
+}
+
+.library-card-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.library-icon { font-size: 1.5rem; flex-shrink: 0; margin-top: 2px; }
+.library-info { flex: 1; }
+
+.library-name {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.92rem;
+  font-weight: 500;
+  color: #333;
+  margin: 0 0 0.2rem;
+}
+
+.library-desc {
+  font-size: 0.8rem;
+  color: #999;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.library-card-bottom { margin-top: auto; }
+
+.library-add-btn {
+  width: 100%;
+  padding: 0.45rem 0.75rem;
+  border: none;
+  border-radius: 10px;
+  color: white;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.83rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: filter 0.2s, transform 0.15s;
+}
+.library-add-btn:hover {
+  filter: brightness(0.92);
+  transform: translateY(-1px);
+}
+</style>
+{% endblock %}
