@@ -44,3 +44,58 @@ document.querySelectorAll('.gpb-fill, .hp-fill').forEach(bar => {
 
 // Confirm habit toggle with visual feedback
 window.habitToggleCooldown = {};
+
+// ── Notifications ─────────────────────────────────────────────────────────────
+(function () {
+  const bell     = document.getElementById('notifBell');
+  const dropdown = document.getElementById('notifDropdown');
+  const badge    = document.getElementById('notifBadge');
+  const list     = document.getElementById('notifList');
+  const closeBtn = document.getElementById('notifClose');
+
+  if (!bell) return; // not logged in
+
+  const TYPE_ICONS = { checkin: '🌿', period: '🌹', habit: '✨' };
+
+  async function loadNotifications() {
+    try {
+      const res  = await fetch('/api/notifications');
+      const data = await res.json();
+      const notifs = data.notifications;
+
+      if (notifs.length === 0) {
+        list.innerHTML = '<div class="notif-empty">You\'re all caught up 🌸</div>';
+        badge.style.display = 'none';
+      } else {
+        badge.textContent    = notifs.length;
+        badge.style.display  = 'flex';
+        list.innerHTML = notifs.map(n => `
+          <div class="notif-card type-${n.type}">
+            <div class="notif-card-title">${TYPE_ICONS[n.type] || ''} ${n.title}</div>
+            <div class="notif-card-msg">${n.message}</div>
+            <a class="notif-card-link" href="${n.link}">${n.link_label} →</a>
+          </div>
+        `).join('');
+      }
+    } catch (e) {
+      console.warn('Could not load notifications', e);
+    }
+  }
+
+  bell.addEventListener('click', (e) => {
+    e.stopPropagation();
+    dropdown.classList.toggle('open');
+  });
+
+  closeBtn.addEventListener('click', () => dropdown.classList.remove('open'));
+
+  document.addEventListener('click', (e) => {
+    if (!dropdown.contains(e.target) && e.target !== bell) {
+      dropdown.classList.remove('open');
+    }
+  });
+
+  // Load on page open, refresh every 5 minutes
+  loadNotifications();
+  setInterval(loadNotifications, 5 * 60 * 1000);
+})();

@@ -1180,7 +1180,72 @@ def emotional_patterns_page():
         phase_avg=phase_avg,
         data=data
     )
+@app.route('/api/notifications')
+@login_required
+def get_notifications():
+    user = get_current_user()
+    notifications = []
+    today = date.today()
 
+    conn = get_db()
+    cur = conn.cursor()
+
+    # 1. Check-in reminder — if no check-in today
+    cur.execute("SELECT id FROM checkins WHERE user_id=%s AND checkin_date=%s",
+                (user['id'], today))
+    if not cur.fetchone():
+        notifications.append({
+            'id': 'checkin-today',
+            'type': 'checkin',
+            'title': 'Daily Check-in',
+            'message': 'How are you feeling today? Take a moment to check in. 🌿',
+            'link': '/checkin',
+            'link_label': 'Check in now'
+        })
+
+    # 2. Upcoming period reminder — within 3 days
+    next_start, _ = predict_next_period(user)
+    if next_start:
+        days_away = (next_start - today).days
+        if 0 <= days_away <= 3:
+            if days_away == 0:
+                msg = 'Your period is predicted to start today. Take care of yourself. 🌹'
+            elif days_away == 1:
+                msg = 'Your period is predicted tomorrow. Be gentle with yourself. 🌹'
+            else:
+                msg = f'Your period is predicted in {days_away} days. A little heads-up. 🌹'
+            notifications.append({
+                'id': 'period-soon',
+                'type': 'period',
+                'title': 'Period Approaching',
+                'message': msg,
+                'link': '/calendar',
+                'link_label': 'View Calendar'
+            })
+
+    # 3. Habit nudge — habits exist but none completed today
+    cur.execute("SELECT id FROM habits WHERE user_id=%s AND active=TRUE", (user['id'],))
+    habits = cur.fetchall()
+    if habits:
+        cur.execute("""
+            SELECT COUNT(*) as cnt FROM habit_logs
+            WHERE user_id=%s AND log_date=%s AND completed=TRUE
+        """, (user['id'], today))
+        completed = cur.fetchone()['cnt']
+        if completed == 0:
+            notifications.append({
+                'id': 'habits-today',
+                'type': 'habit',
+                'title': 'Habits Today',
+                'message': "You haven't logged any habits yet today. Small steps matter. ✨",
+                'link': '/habits',
+                'link_label': 'Log habits'
+            })
+
+    cur.close()
+    conn.close()
+
+    return jsonify({'notifications': notifications, 'count': len(notifications)})
 # ── Run ───────────────────────────────────────────────────────────────────────
 
 with app.app_context():
