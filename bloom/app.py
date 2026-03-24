@@ -102,6 +102,15 @@ def init_db():
             earned_at TIMESTAMP DEFAULT NOW(),
             last_watered TIMESTAMP DEFAULT NOW()
         );
+        CREATE TABLE IF NOT EXISTS reflections (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+            entry_type VARCHAR(20) DEFAULT 'free',
+            content TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+        ;
+            
     """)
     conn.commit()
     cur.close()
@@ -1180,72 +1189,75 @@ def emotional_patterns_page():
         phase_avg=phase_avg,
         data=data
     )
-@app.route('/api/notifications')
-@login_required
-def get_notifications():
-    user = get_current_user()
-    notifications = []
-    today = date.today()
 
+# ── Reflections ───────────────────────────────────────────────────────────────
+
+@app.route('/reflect', methods=['GET', 'POST'])
+@login_required
+def reflect():
+    user = get_current_user()
     conn = get_db()
     cur = conn.cursor()
 
-    # 1. Check-in reminder — if no check-in today
-    cur.execute("SELECT id FROM checkins WHERE user_id=%s AND checkin_date=%s",
-                (user['id'], today))
-    if not cur.fetchone():
-        notifications.append({
-            'id': 'checkin-today',
-            'type': 'checkin',
-            'title': 'Daily Check-in',
-            'message': 'How are you feeling today? Take a moment to check in. 🌿',
-            'link': '/checkin',
-            'link_label': 'Check in now'
-        })
+    if request.method == 'POST':
+        content = request.form.get('content', '').strip()
+        if content:
+            cur.execute("""
+                INSERT INTO reflections (user_id, entry_type, content) 
+                VALUES (%s, 'free', %s)
+            """, (user['id'], content))
+            conn.commit()
+            flash('Reflection saved. 🌿', 'success')
+        cur.close()
+        conn.close()
+        return redirect(url_for('reflect'))
 
-    # 2. Upcoming period reminder — within 3 days
-    next_start, _ = predict_next_period(user)
-    if next_start:
-        days_away = (next_start - today).days
-        if 0 <= days_away <= 3:
-            if days_away == 0:
-                msg = 'Your period is predicted to start today. Take care of yourself. 🌹'
-            elif days_away == 1:
-                msg = 'Your period is predicted tomorrow. Be gentle with yourself. 🌹'
-            else:
-                msg = f'Your period is predicted in {days_away} days. A little heads-up. 🌹'
-            notifications.append({
-                'id': 'period-soon',
-                'type': 'period',
-                'title': 'Period Approaching',
-                'message': msg,
-                'link': '/calendar',
-                'link_label': 'View Calendar'
-            })
-
-    # 3. Habit nudge — habits exist but none completed today
-    cur.execute("SELECT id FROM habits WHERE user_id=%s AND active=TRUE", (user['id'],))
-    habits = cur.fetchall()
-    if habits:
-        cur.execute("""
-            SELECT COUNT(*) as cnt FROM habit_logs
-            WHERE user_id=%s AND log_date=%s AND completed=TRUE
-        """, (user['id'], today))
-        completed = cur.fetchone()['cnt']
-        if completed == 0:
-            notifications.append({
-                'id': 'habits-today',
-                'type': 'habit',
-                'title': 'Habits Today',
-                'message': "You haven't logged any habits yet today. Small steps matter. ✨",
-                'link': '/habits',
-                'link_label': 'Log habits'
-            })
-
+    cur.execute("""
+        SELECT * FROM reflections
+        WHERE user_id = %s
+        ORDER BY created_at DESC
+        LIMIT 20
+    """, (user['id'],))
+    reflections = cur.fetchall()
     cur.close()
     conn.close()
 
-    return jsonify({'notifications': notifications, 'count': len(notifications)})
+    return render_template('reflect.html', user=user, reflections=reflections, today=date.today())
+
+@app.route('/reflect/edit/<int:reflection_id>', methods=['POST'])
+@login_required
+def edit_reflection(reflection_id):
+    content = request.form.get('content', '').strip()
+    if content:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("""
+            UPDATE reflections SET content = %s, updated_at = NOW()
+            WHERE id = %s AND user_id = %s
+        """, (content, reflection_id, session['user_id']))
+        conn.commit()
+        cur.close()
+        conn.close()
+        flash("Reflection updated. 🌿", 'success')
+    return redirect(url_for('reflect'))
+
+@app.route('/reflect/delete/<int:reflection_id>', methods=['POST'])
+@login_required
+def delete_reflection(reflection_id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM reflections WHERE id = %s AND user_id = %s",
+                    (reflection_id, session['user_id']))
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash('Refection deleted.', 'info')
+    return redirect(url_for('reflect'))
+
+
+
+
+
 # ── Run ───────────────────────────────────────────────────────────────────────
 
 with app.app_context():

@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Bloom – Reflect{% endblock %}
+
+{% block content %}
+<div class="checkin-page">
+
+  <div class="checkin-header">
+    <h1>Free Write <em>✿</em></h1>
+    <p>Write freely. No prompts, no rules, just you.</p>
+  </div>
+
+  <!-- New Entry Form -->
+  <form method="POST" action="{{ url_for('reflect') }}" class="checkin-form">
+    <div class="ci-section">
+      <h2>Today's Reflection <span class="ci-optional">{{ today.strftime('%B %-d') }}</span></h2>
+      <textarea
+        name="content"
+        class="bloom-input ci-notes"
+        rows="7"
+        placeholder="What's on your mind? Write as much or as little as you'd like..."></textarea>
+    </div>
+
+    <div class="ci-submit">
+      <button type="submit" class="bloom-btn bloom-btn-primary bloom-btn-lg">
+        Save Reflection 🌿
+      </button>
+      <a href="{{ url_for('dashboard') }}" class="bloom-btn bloom-btn-ghost">Cancel</a>
+    </div>
+  </form>
+
+  <!-- Past Reflections -->
+  {% if reflections %}
+  <div class="recent-checkins">
+    <h2>Past Reflections</h2>
+    <div class="recent-list">
+      {% for r in reflections %}
+      <div class="recent-item" style="flex-direction: column; align-items: flex-start; gap: 0.5rem; padding: 1rem 0;">
+
+        <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
+          <span class="rc-date">{{ r.created_at.strftime('%B %-d, %Y') }}</span>
+          <div style="display: flex; gap: 0.75rem;">
+            <button class="card-link"
+                    onclick="toggleEdit({{ r.id }})"
+                    style="background: none; border: none; cursor: pointer; font-family: inherit;">
+              Edit
+            </button>
+            <form method="POST" action="{{ url_for('delete_reflection', reflection_id=r.id) }}"
+                  style="display:inline"
+                  onsubmit="return confirm('Delete this reflection?')">
+              <button type="submit"
+                      class="card-link"
+                      style="background: none; border: none; cursor: pointer; font-family: inherit; color: #c97060;">
+                Delete
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <!-- Read view -->
+        <p id="view-{{ r.id }}"
+           style="margin: 0; white-space: pre-wrap; color: #888;">{{ r.content }}</p>
+
+        <!-- Edit view (hidden by default) -->
+        <form id="edit-{{ r.id }}" method="POST"
+              action="{{ url_for('edit_reflection', reflection_id=r.id) }}"
+              style="display: none; width: 100%;">
+          <textarea name="content" class="bloom-input ci-notes" rows="5"
+                    style="width: 100%; margin-bottom: 0.5rem;">{{ r.content }}</textarea>
+          <div style="display: flex; gap: 0.75rem;">
+            <button type="submit" class="bloom-btn bloom-btn-primary">Save</button>
+            <button type="button" class="bloom-btn bloom-btn-ghost"
+                    onclick="toggleEdit({{ r.id }})">Cancel</button>
+          </div>
+        </form>
+
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% else %}
+  <div style="text-align: center; padding: 2rem 0; color: #aaa;">
+    <p>No reflections yet. Your first entry will appear here. 🌱</p>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleEdit(id) {
+  const view = document.getElementById('view-' + id);
+  const form = document.getElementById('edit-' + id);
+  const hidden = form.style.display === 'none';
+  view.style.display = hidden ? 'none' : '';
+  form.style.display = hidden ? 'block' : 'none';
+}
+</script>
+{% endblock %}
