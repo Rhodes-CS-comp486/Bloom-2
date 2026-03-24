@@ -102,6 +102,15 @@ def init_db():
             earned_at TIMESTAMP DEFAULT NOW(),
             last_watered TIMESTAMP DEFAULT NOW()
         );
+        CREATE TABLE IF NOT EXISTS reflections (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+            entry_type VARCHAR(20) DEFAULT 'free',
+            content TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+        ;
+            
     """)
     conn.commit()
     cur.close()
@@ -1180,6 +1189,74 @@ def emotional_patterns_page():
         phase_avg=phase_avg,
         data=data
     )
+
+# ── Reflections ───────────────────────────────────────────────────────────────
+
+@app.route('/reflect', methods=['GET', 'POST'])
+@login_required
+def reflect():
+    user = get_current_user()
+    conn = get_db()
+    cur = conn.cursor()
+
+    if request.method == 'POST':
+        content = request.form.get('content', '').strip()
+        if content:
+            cur.execute("""
+                INSERT INTO reflections (user_id, entry_type, content) 
+                VALUES (%s, 'free', %s)
+            """, (user['id'], content))
+            conn.commit()
+            flash('Reflection saved. 🌿', 'success')
+        cur.close()
+        conn.close()
+        return redirect(url_for('reflect'))
+
+    cur.execute("""
+        SELECT * FROM reflections
+        WHERE user_id = %s
+        ORDER BY created_at DESC
+        LIMIT 20
+    """, (user['id'],))
+    reflections = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    return render_template('reflect.html', user=user, reflections=reflections, today=date.today())
+
+@app.route('/reflect/edit/<int:reflection_id>', methods=['POST'])
+@login_required
+def edit_reflection(reflection_id):
+    content = request.form.get('content', '').strip()
+    if content:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("""
+            UPDATE reflections SET content = %s, updated_at = NOW()
+            WHERE id = %s AND user_id = %s
+        """, (content, reflection_id, session['user_id']))
+        conn.commit()
+        cur.close()
+        conn.close()
+        flash("Reflection updated. 🌿", 'success')
+    return redirect(url_for('reflect'))
+
+@app.route('/reflect/delete/<int:reflection_id>', methods=['POST'])
+@login_required
+def delete_reflection(reflection_id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM reflections WHERE id = %s AND user_id = %s",
+                    (reflection_id, session['user_id']))
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash('Refection deleted.', 'info')
+    return redirect(url_for('reflect'))
+
+
+
+
 
 # ── Run ───────────────────────────────────────────────────────────────────────
 
