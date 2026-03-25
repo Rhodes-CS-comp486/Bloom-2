@@ -34,6 +34,7 @@ def get_db():
 def init_db():
     conn = get_db()
     cur = conn.cursor()
+
     cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id SERIAL PRIMARY KEY,
@@ -50,7 +51,10 @@ def init_db():
             contraceptive_method VARCHAR(100),
             trying_to_conceive BOOLEAN DEFAULT FALSE,
             created_at TIMESTAMP DEFAULT NOW()
-        );
+        )
+    """)
+
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS periods (
             id SERIAL PRIMARY KEY,
             user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -59,7 +63,10 @@ def init_db():
             flow_intensity VARCHAR(20),
             notes TEXT,
             created_at TIMESTAMP DEFAULT NOW()
-        );
+        )
+    """)
+
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS habits (
             id SERIAL PRIMARY KEY,
             user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -70,7 +77,10 @@ def init_db():
             icon VARCHAR(50) DEFAULT '✿',
             active BOOLEAN DEFAULT TRUE,
             created_at TIMESTAMP DEFAULT NOW()
-        );
+        )
+    """)
+
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS habit_logs (
             id SERIAL PRIMARY KEY,
             habit_id INTEGER REFERENCES habits(id) ON DELETE CASCADE,
@@ -79,7 +89,10 @@ def init_db():
             completed BOOLEAN DEFAULT TRUE,
             created_at TIMESTAMP DEFAULT NOW(),
             UNIQUE(habit_id, log_date)
-        );
+        )
+    """)
+
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS checkins (
             id SERIAL PRIMARY KEY,
             user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -91,7 +104,10 @@ def init_db():
             notes TEXT,
             created_at TIMESTAMP DEFAULT NOW(),
             UNIQUE(user_id, checkin_date)
-        );
+        )
+    """)
+
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS garden_items (
             id SERIAL PRIMARY KEY,
             user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -101,21 +117,28 @@ def init_db():
             position_y FLOAT DEFAULT 50.0,
             earned_at TIMESTAMP DEFAULT NOW(),
             last_watered TIMESTAMP DEFAULT NOW()
-        );
-        CREATE TABLE IF NOT EXISTS reflections (
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS suggestions (
             id SERIAL PRIMARY KEY,
             user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-            entry_type VARCHAR(20) DEFAULT 'free',
-            content TEXT NOT NULL,
+            title VARCHAR(100) NOT NULL DEFAULT 'Recommendation',
+            message TEXT NOT NULL,
+            category VARCHAR(50),
+            status VARCHAR(20) NOT NULL DEFAULT 'unread'
+                CHECK (status IN ('unread', 'accepted', 'modified', 'dismissed')),
+            modified_message TEXT,
+            dismissible BOOLEAN DEFAULT TRUE,
             created_at TIMESTAMP DEFAULT NOW(),
-            updated_at TIMESTAMP DEFAULT NOW()
-        ;
-            
+            responded_at TIMESTAMP
+        )
     """)
+
     conn.commit()
     cur.close()
     conn.close()
-
 
 def migrate_db():
     """Safely add new columns to existing tables."""
@@ -1254,7 +1277,72 @@ def delete_reflection(reflection_id):
     flash('Refection deleted.', 'info')
     return redirect(url_for('reflect'))
 
+@app.route('/api/notifications')
+@login_required
+def get_notifications():
+    user = get_current_user()
+    notifications = []
+    today = date.today()
 
+    conn = get_db()
+    cur = conn.cursor()
+
+    # 1. Check-in reminder — if no check-in today
+    cur.execute("SELECT id FROM checkins WHERE user_id=%s AND checkin_date=%s",
+                (user['id'], today))
+    if not cur.fetchone():
+        notifications.append({
+            'id': 'checkin-today',
+            'type': 'checkin',
+            'title': 'Daily Check-in',
+            'message': 'How are you feeling today? Take a moment to check in. 🌿',
+            'link': '/checkin',
+            'link_label': 'Check in now'
+        })
+
+    # 2. Upcoming period reminder — within 3 days
+    next_start, _ = predict_next_period(user)
+    if next_start:
+        days_away = (next_start - today).days
+        if 0 <= days_away <= 3:
+            if days_away == 0:
+                msg = 'Your period is predicted to start today. Take care of yourself. 🌹'
+            elif days_away == 1:
+                msg = 'Your period is predicted tomorrow. Be gentle with yourself. 🌹'
+            else:
+                msg = f'Your period is predicted in {days_away} days. A little heads-up. 🌹'
+            notifications.append({
+                'id': 'period-soon',
+                'type': 'period',
+                'title': 'Period Approaching',
+                'message': msg,
+                'link': '/calendar',
+                'link_label': 'View Calendar'
+            })
+
+    # 3. Habit nudge — habits exist but none completed today
+    cur.execute("SELECT id FROM habits WHERE user_id=%s AND active=TRUE", (user['id'],))
+    habits = cur.fetchall()
+    if habits:
+        cur.execute("""
+            SELECT COUNT(*) as cnt FROM habit_logs
+            WHERE user_id=%s AND log_date=%s AND completed=TRUE
+        """, (user['id'], today))
+        completed = cur.fetchone()['cnt']
+        if completed == 0:
+            notifications.append({
+                'id': 'habits-today',
+                'type': 'habit',
+                'title': 'Habits Today',
+                'message': "You haven't logged any habits yet today. Small steps matter. ✨",
+                'link': '/habits',
+                'link_label': 'Log habits'
+            })
+
+    cur.close()
+    conn.close()
+
+    return jsonify({'notifications': notifications, 'count': len(notifications)})
 
 
 
