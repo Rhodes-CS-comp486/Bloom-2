@@ -580,7 +580,8 @@ def calendar_view():
 
     # Serialize for JSON
     periods_json = [
-        {'start': str(p['start_date']), 'end': str(p['end_date']) if p['end_date'] else str(p['start_date']),
+        {'id': p['id'], 'start': str(p['start_date']),
+         'end': str(p['end_date']) if p['end_date'] else str(p['start_date']),
          'flow': p['flow_intensity'], 'notes': p['notes'], 'actual': True}
         for p in periods
     ]
@@ -855,6 +856,31 @@ def delete_period(period_id):
     cur = conn.cursor()
     cur.execute("DELETE FROM periods WHERE id=%s AND user_id=%s",
                 (period_id, session['user_id']))
+    conn.commit()
+    cur.close(); conn.close()
+    return jsonify({'success': True})
+
+@app.route('/period/edit/<int:period_id>', methods=['POST'])
+@login_required
+def edit_period(period_id):
+    data = request.get_json()
+    start_date = data.get('start_date')
+    end_date = data.get('end_date') or None
+    flow = data.get('flow_intensity', 'medium')
+    notes = data.get('notes', '')
+    if not start_date:
+        return jsonify({'success': False, 'error': 'start_date required'}), 400
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT id FROM periods WHERE id=%s AND user_id=%s",
+                (period_id, session['user_id']))
+    if not cur.fetchone():
+        cur.close(); conn.close()
+        return jsonify({'success': False, 'error': 'not found'}), 404
+    cur.execute("""
+        UPDATE periods SET start_date=%s, end_date=%s, flow_intensity=%s, notes=%s
+        WHERE id=%s AND user_id=%s
+    """, (start_date, end_date, flow, notes, period_id, session['user_id']))
     conn.commit()
     cur.close(); conn.close()
     return jsonify({'success': True})
@@ -1160,13 +1186,10 @@ def emotional_patterns_page():
     period_curve = {"-3": [], "-2": [], "-1": [], "0": [], "+1": [], "+2": [], "+3": []}
 
     for entry in data:
-        for period in periods:
-            start = period["start_date"]
-            if isinstance(start, str):
-                start = date.fromisoformat(start)
+        for start, end in periods:
             delta = (entry["date"] - start).days
             if -3 <= delta <= 3:
-                key = f"+{delta}" if delta > 0 else str(delta)
+                key = str(delta)
                 period_curve[key].append(entry["mood"])
 
     period_avg = {
@@ -1190,10 +1213,7 @@ def emotional_patterns_page():
     phase_map = {"menstrual": [], "follicular": [], "ovulation": [], "luteal": []}
 
     for entry in data:
-        for period in periods:
-            start = period["start_date"]
-            if isinstance(start, str):
-                start = date.fromisoformat(start)
+        for start, end in periods:
             cycle_day = (entry["date"] - start).days
             if 0 <= cycle_day <= 28:
                 phase = get_phase(cycle_day)
