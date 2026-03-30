@@ -206,6 +206,18 @@
         <button class="sug-btn dismiss" onclick="dismissSuggestion()">Dismiss</button>
     </div>
 </div>
+      <!-- Planning -->
+
+<div class="dash-card planning-card">
+    <div class="card-header">
+        <h2>Cycle Planning</h2>
+        <span class="planning-icon">🗓️</span>
+    </div>
+
+    <div id="planningContent">
+        <p>Loading...</p>
+    </div>
+</div>
 
 
     <!-- Log Period -->
@@ -301,6 +313,49 @@ document.addEventListener("DOMContentLoaded", function () {
                 document.getElementById("suggestion-card").classList.remove("hidden");
             });
     }
+    fetch('/api/planning')
+    .then(res => res.json())
+    .then(prediction => {
+        const container = document.getElementById("planningContent");
+
+        function fmt(dateStr) {
+            if (!dateStr) return "—";
+            const d = new Date(dateStr);
+            return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+        }
+
+        if (prediction.status === "no_data") {
+            container.innerHTML = `
+                <p>${prediction.message}</p>
+            `;
+            return;
+        }
+
+        if (prediction.status === "single_cycle") {
+            container.innerHTML = `
+                <p>Next predicted period:</p>
+                <p class="planning-highlight">${fmt(prediction.next_period)}</p>
+
+            `;
+            return;
+        }
+
+        if (prediction.status === "ok") {
+            container.innerHTML = `
+                <p>Next period:</p>
+                <p class="planning-highlight">${fmt(prediction.next_period)}</p>
+
+                <p>Expected range:</p>
+                <p class="planning-highlight">
+                    ${fmt(prediction.range_start)} – ${fmt(prediction.range_end)}
+                </p>
+
+                <p>Average cycle length: <span class="planning-highlight">${prediction.avg_cycle_length} days</span></p>
+                <p>Cycles tracked: <span class="planning-highlight">${prediction.cycle_count}</span></p>
+            `;
+        }
+    });
+
 });
 
 /* ------------------------------
@@ -337,6 +392,7 @@ function acceptSuggestion() {
 function modifySuggestion() {
     alert("You can now modify this suggestion.");
 }
+
 
 /* ------------------------------
    LOG PERIOD

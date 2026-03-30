@@ -141,13 +141,26 @@
 .qp-msg { font-size:0.78rem; color:#c97060; text-align:center; min-height:1em; }
 
 /* Event detail popup */
-.ev-popup { position:fixed; background:white; border-radius:12px; box-shadow:0 8px 40px rgba(42,32,24,0.18); padding:1.25rem; width:270px; z-index:500; border:1px solid #e8d8c0; display:none; }
+.ev-popup { position:fixed; background:white; border-radius:12px; box-shadow:0 8px 40px rgba(42,32,24,0.18); padding:1.25rem; width:290px; z-index:500; border:1px solid #e8d8c0; display:none; }
 .evp-head { display:flex; align-items:flex-start; justify-content:space-between; gap:0.5rem; margin-bottom:0.75rem; }
 .evp-title { font-family:'Cormorant Garamond',serif; font-size:1.15rem; }
 .evp-x { background:none; border:none; cursor:pointer; font-size:1rem; color:#9b8878; flex-shrink:0; }
 .evp-body { font-size:0.82rem; color:#6b5a45; display:flex; flex-direction:column; gap:0.35rem; }
-.evp-del { margin-top:0.75rem; font-size:0.78rem; color:#c97060; cursor:pointer; border:none; background:none; font-family:'DM Sans'; padding:0; }
+.evp-actions { display:flex; gap:0.5rem; margin-top:0.75rem; }
+.evp-del { font-size:0.78rem; color:#c97060; cursor:pointer; border:none; background:none; font-family:'DM Sans'; padding:0; }
 .evp-del:hover { text-decoration:underline; }
+.evp-edit-btn { font-size:0.78rem; color:#6b5a45; cursor:pointer; border:none; background:none; font-family:'DM Sans'; padding:0; }
+.evp-edit-btn:hover { text-decoration:underline; }
+
+/* Edit form inside popup */
+.evp-edit-form { display:none; flex-direction:column; gap:0.6rem; margin-top:0.75rem; border-top:1px solid #f0e8db; padding-top:0.75rem; }
+.evp-edit-form.on { display:flex; }
+.evp-edit-form .qp-label { margin-bottom:1px; }
+.evp-edit-form .qp-inp { font-size:0.8rem; padding:0.4rem 0.6rem; }
+.evp-edit-form .qp-flow-opt { font-size:0.7rem; padding:0.25rem; }
+.evp-save-btn { width:100%; padding:0.48rem; background:#c97060; color:white; border:none; border-radius:8px; cursor:pointer; font-family:'DM Sans',sans-serif; font-size:0.82rem; font-weight:500; }
+.evp-save-btn:hover { background:#a05040; }
+.evp-save-msg { font-size:0.75rem; color:#c97060; text-align:center; min-height:1em; }
 </style>
 {% endblock %}
 
@@ -223,7 +236,29 @@
     <button class="evp-x" onclick="closeEv()">✕</button>
   </div>
   <div class="evp-body" id="evBody"></div>
-  <button class="evp-del" id="evDel" style="display:none" onclick="delPeriod()">🗑 Delete period log</button>
+  <div class="evp-actions" id="evActions" style="display:none">
+    <button class="evp-edit-btn" onclick="toggleEditForm()">✏️ Edit</button>
+    <button class="evp-del" id="evDel" onclick="delPeriod()">🗑 Delete</button>
+  </div>
+
+  <!-- Inline edit form (hidden until Edit clicked) -->
+  <div class="evp-edit-form" id="evEditForm">
+    <div class="qp-2col">
+      <div><span class="qp-label">Start</span><input type="date" class="qp-inp" id="evEditStart"/></div>
+      <div><span class="qp-label">End</span><input type="date" class="qp-inp" id="evEditEnd"/></div>
+    </div>
+    <div>
+      <span class="qp-label">Flow</span>
+      <div class="qp-flow" id="evEditFlow">
+        <button class="qp-flow-opt" onclick="setEditFlow(this,'light')">Light</button>
+        <button class="qp-flow-opt" onclick="setEditFlow(this,'medium')">Medium</button>
+        <button class="qp-flow-opt" onclick="setEditFlow(this,'heavy')">Heavy</button>
+      </div>
+    </div>
+    <div><span class="qp-label">Notes</span><textarea class="qp-inp" id="evEditNotes" rows="2"></textarea></div>
+    <button class="evp-save-btn" onclick="saveEditPeriod()">Save Changes</button>
+    <div class="evp-save-msg" id="evSaveMsg"></div>
+  </div>
 </div>
 
 <script>
@@ -235,7 +270,9 @@ const todayStr = "{{ today }}";
 let view = 'month';
 let cur  = new Date();
 let flow = 'medium';
+let editFlow = 'medium';
 let activePeriodId = null;
+let activePeriod = null;
 let dragAnchor = null;
 let dragging = false;
 
@@ -534,8 +571,10 @@ function showEv(e, k, type) {
   const popup=document.getElementById('evPopup');
   const title=document.getElementById('evTitle');
   const body=document.getElementById('evBody');
-  const del=document.getElementById('evDel');
-  activePeriodId=null; del.style.display='none';
+  const actions=document.getElementById('evActions');
+  activePeriodId=null; activePeriod=null;
+  actions.style.display='none';
+  document.getElementById('evEditForm').classList.remove('on');
 
   if (type==='period'||type==='predicted') {
     const p=periodsData.find(p=>k>=p.start && k<=(p.end||p.start));
@@ -546,9 +585,13 @@ function showEv(e, k, type) {
     info+='</div>';
     if(p.flow) info+=`<div>Flow: <strong>${p.flow}</strong></div>`;
     if(p.notes) info+=`<div style="font-style:italic">"${p.notes}"</div>`;
-    if(!p.actual) info+=`<div style="color:#c97060;margin-top:4px;font-size:0.78rem">Predicted based on your ${periodsData[0]?.cycleLength||28}-day cycle</div>`;
+    if(!p.actual) info+=`<div style="color:#c97060;margin-top:4px;font-size:0.78rem">Predicted based on your cycle</div>`;
     body.innerHTML=info;
-    if(p.actual&&p.id){ activePeriodId=p.id; del.style.display='block'; }
+    if(p.actual&&p.id){
+      activePeriodId=p.id;
+      activePeriod=p;
+      actions.style.display='flex';
+    }
   } else if (type==='checkin') {
     const c=CM[k]; if(!c) return;
     title.textContent='♡ Check-in';
@@ -564,13 +607,72 @@ function showEv(e, k, type) {
   }
   posP(popup,e); popup.style.display='block';
 }
-function closeEv() { document.getElementById('evPopup').style.display='none'; }
+
+function closeEv() {
+  document.getElementById('evPopup').style.display='none';
+  document.getElementById('evEditForm').classList.remove('on');
+}
+
 async function delPeriod() {
   if(!activePeriodId||!confirm('Delete this period log?')) return;
   await fetch('/period/delete/'+activePeriodId,{method:'POST'});
   const idx=periodsData.findIndex(p=>p.id===activePeriodId);
   if(idx>-1) periodsData.splice(idx,1);
   PM=buildPeriodMap(); closeEv(); render();
+}
+
+// ── Edit Period ───────────────────────────────────────────────────────────────
+function toggleEditForm() {
+  const form = document.getElementById('evEditForm');
+  const isOn = form.classList.contains('on');
+  if (isOn) { form.classList.remove('on'); return; }
+
+  // Populate fields with current values
+  document.getElementById('evEditStart').value = activePeriod.start || '';
+  document.getElementById('evEditEnd').value   = activePeriod.end   || '';
+  document.getElementById('evEditNotes').value = activePeriod.notes || '';
+  document.getElementById('evSaveMsg').textContent = '';
+
+  // Set flow buttons
+  editFlow = activePeriod.flow || 'medium';
+  document.querySelectorAll('#evEditFlow .qp-flow-opt').forEach(b => {
+    b.classList.toggle('on', b.textContent.toLowerCase() === editFlow);
+  });
+
+  form.classList.add('on');
+}
+
+function setEditFlow(btn, val) {
+  document.querySelectorAll('#evEditFlow .qp-flow-opt').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+  editFlow = val;
+}
+
+async function saveEditPeriod() {
+  if (!activePeriodId) return;
+  const start = document.getElementById('evEditStart').value;
+  const end   = document.getElementById('evEditEnd').value;
+  const notes = document.getElementById('evEditNotes').value;
+  if (!start) { document.getElementById('evSaveMsg').textContent = 'Start date is required.'; return; }
+
+  const r = await fetch('/period/edit/'+activePeriodId, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({start_date: start, end_date: end||null, flow_intensity: editFlow, notes})
+  });
+  const data = await r.json();
+  if (data.success) {
+    document.getElementById('evSaveMsg').textContent = '✓ Saved!';
+    // Update local data
+    const idx = periodsData.findIndex(p => p.id === activePeriodId);
+    if (idx > -1) {
+      periodsData[idx] = {...periodsData[idx], start, end: end||start, flow: editFlow, notes};
+    }
+    PM = buildPeriodMap();
+    setTimeout(() => { closeEv(); render(); }, 600);
+  } else {
+    document.getElementById('evSaveMsg').textContent = 'Could not save. Try again.';
+  }
 }
 
 function posP(popup, e) {
