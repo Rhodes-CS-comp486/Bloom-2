@@ -107,79 +107,6 @@ def init_db():
     cur.close()
     conn.close()
 
-
-def migrate_db():
-    """Safely add new columns to existing tables."""
-    conn = get_db()
-    cur = conn.cursor()
-    try:
-        cur.execute("ALTER TABLE habits ADD COLUMN IF NOT EXISTS paused BOOLEAN DEFAULT FALSE")
-        conn.commit()
-    except Exception as e:
-        print(f"Migration note: {e}")
-        conn.rollback()
-    cur.close()
-    conn.close()
-
-# ── Habit Library ──────────────────────────────────────────────────────────────
-HABIT_LIBRARY = [
-    # ── Wellness ──────────────────────────────────────────────────────────────
-    {"name": "Drink Water 💧",          "description": "Drink 8 glasses of water",             "color": "#5b8fa8", "icon": "💧", "category": "Wellness"},
-    {"name": "Take Vitamins 🌸",        "description": "Daily supplements",                    "color": "#e8a598", "icon": "🌸", "category": "Wellness"},
-    {"name": "Limit Caffeine ☕",       "description": "Max 1 coffee or tea",                  "color": "#c4a882", "icon": "☕", "category": "Wellness"},
-    {"name": "Morning Sunlight ☀️",    "description": "Get sunlight within an hour of waking", "color": "#f0d080", "icon": "☀️", "category": "Wellness"},
-    {"name": "Cold Shower 🚿",          "description": "End your shower with 30s of cold water","color": "#90c4d8", "icon": "🚿", "category": "Wellness"},
-    {"name": "Skincare Routine 🧴",     "description": "Morning or evening skincare",          "color": "#f0c8b8", "icon": "🧴", "category": "Wellness"},
-    {"name": "Wash Face 🫧",            "description": "Cleanse morning and night",             "color": "#c8e8f0", "icon": "🫧", "category": "Wellness"},
-    # ── Movement ──────────────────────────────────────────────────────────────
-    {"name": "Move Your Body 🌿",       "description": "30 min of gentle movement",            "color": "#86b49c", "icon": "🌿", "category": "Movement"},
-    {"name": "Stretch 🧘",              "description": "10 min of stretching",                 "color": "#b8a9c9", "icon": "🧘", "category": "Movement"},
-    {"name": "Go Outside 🌤️",          "description": "Get fresh air for 15 min",             "color": "#a8c8a0", "icon": "🌤️", "category": "Movement"},
-    {"name": "Walk 6,000 Steps 👟",     "description": "Aim for a gentle daily step goal",     "color": "#a0c4a8", "icon": "👟", "category": "Movement"},
-    {"name": "Yoga Flow 🌸",            "description": "A short yoga sequence",                "color": "#c8b4d8", "icon": "🌸", "category": "Movement"},
-    {"name": "Dance It Out 💃",         "description": "Put on a song and move freely",        "color": "#f0b8d0", "icon": "💃", "category": "Movement"},
-    # ── Mind ──────────────────────────────────────────────────────────────────
-    {"name": "Meditate 🌙",             "description": "5-10 min of mindfulness",              "color": "#9ab0c4", "icon": "🌙", "category": "Mind"},
-    {"name": "Journal ✍️",              "description": "Write down your thoughts",             "color": "#f2c4a0", "icon": "✍️", "category": "Mind"},
-    {"name": "Read 📖",                 "description": "Read for 20 minutes",                  "color": "#c4b0a0", "icon": "📖", "category": "Mind"},
-    {"name": "Gratitude Practice 🙏",   "description": "Write 3 things you're grateful for",   "color": "#f0d8a8", "icon": "🙏", "category": "Mind"},
-    {"name": "Digital Detox 🌿",        "description": "One hour with no phone or screens",    "color": "#a8c4a0", "icon": "🌿", "category": "Mind"},
-    {"name": "Learn Something New 🎓",  "description": "Watch, read, or listen to learn",      "color": "#b8c8e8", "icon": "🎓", "category": "Mind"},
-    # ── Rest ──────────────────────────────────────────────────────────────────
-    {"name": "Sleep by 10pm 😴",        "description": "Wind down and sleep early",            "color": "#a0b4c8", "icon": "😴", "category": "Rest"},
-    {"name": "Limit Screen Time 📵",    "description": "No screens 1hr before bed",            "color": "#b0a8c8", "icon": "📵", "category": "Rest"},
-    {"name": "Afternoon Rest 🛋️",      "description": "10-20 min rest or nap",                "color": "#c8b8d8", "icon": "🛋️", "category": "Rest"},
-    {"name": "Wind-Down Routine 🕯️",   "description": "A calming ritual before bed",          "color": "#d8c4b0", "icon": "🕯️", "category": "Rest"},
-    {"name": "Sleep 8 Hours 💤",        "description": "Prioritise a full night of sleep",     "color": "#9098c0", "icon": "💤", "category": "Rest"},
-    # ── Nutrition ─────────────────────────────────────────────────────────────
-    {"name": "Eat a Warm Meal 🍲",      "description": "Nourish yourself with a warm meal",    "color": "#e8b87a", "icon": "🍲", "category": "Nutrition"},
-    {"name": "Eat Iron-Rich Foods 🥗",  "description": "Spinach, lentils, or fortified foods", "color": "#a8c890", "icon": "🥗", "category": "Nutrition"},
-    {"name": "Eat More Vegetables 🥦",  "description": "Add veggies to at least one meal",     "color": "#88b878", "icon": "🥦", "category": "Nutrition"},
-    {"name": "Eat Breakfast 🌅",        "description": "Start the day with a nourishing meal", "color": "#f8d090", "icon": "🌅", "category": "Nutrition"},
-    {"name": "Reduce Sugar 🍬",         "description": "Skip added sugar today",               "color": "#f0a8b8", "icon": "🍬", "category": "Nutrition"},
-    {"name": "Omega-3 Foods 🐟",        "description": "Salmon, walnuts, or flaxseed",         "color": "#88b8d0", "icon": "🐟", "category": "Nutrition"},
-    # ── Social ────────────────────────────────────────────────────────────────
-    {"name": "Connect with Someone 💌", "description": "Reach out to a friend or family",      "color": "#f0b8c0", "icon": "💌", "category": "Social"},
-    {"name": "Acts of Kindness 🤝",     "description": "Do something kind for someone",        "color": "#f8c8a8", "icon": "🤝", "category": "Social"},
-    {"name": "Quality Time 🫶",         "description": "Be fully present with someone you love","color": "#f0b0c8", "icon": "🫶", "category": "Social"},
-    {"name": "Set a Boundary 🌸",       "description": "Honour your needs in a relationship",  "color": "#d8b0c8", "icon": "🌸", "category": "Social"},
-    # ── Cycle ─────────────────────────────────────────────────────────────────
-    {"name": "Track Symptoms 🩺",       "description": "Log any cycle-related symptoms",       "color": "#e8a0b0", "icon": "🩺", "category": "Cycle"},
-    {"name": "Heat Therapy 🌡️",        "description": "Use a heat pad for cramp relief",      "color": "#f4c4a8", "icon": "🌡️", "category": "Cycle"},
-    {"name": "Rest on Heavy Days 🛏️",  "description": "Give yourself permission to slow down", "color": "#c8a8c0", "icon": "🛏️", "category": "Cycle"},
-    {"name": "Magnesium Supplement 💊", "description": "May help with cramps and mood",        "color": "#b8c8e0", "icon": "💊", "category": "Cycle"},
-    {"name": "Gentle Walk 🌸",          "description": "Light movement to ease discomfort",    "color": "#c8e0c0", "icon": "🌸", "category": "Cycle"},
-    # ── Sustainability 🌍 ─────────────────────────────────────────────────────
-    {"name": "Use a Reusable Bottle ♻️","description": "Ditch single-use plastic today",       "color": "#7ab89a", "icon": "♻️", "category": "Sustainability"},
-    {"name": "Meatless Meal 🌱",        "description": "Eat one plant-based meal today",        "color": "#98c888", "icon": "🌱", "category": "Sustainability"},
-    {"name": "Bring a Tote Bag 👜",     "description": "Skip the plastic bag",                 "color": "#c8b888", "icon": "👜", "category": "Sustainability"},
-    {"name": "Shorter Shower 🚿",       "description": "Keep it under 5 minutes",              "color": "#88c0c8", "icon": "🚿", "category": "Sustainability"},
-    {"name": "Turn Off Lights 💡",      "description": "Switch off lights when leaving a room", "color": "#f0d870", "icon": "💡", "category": "Sustainability"},
-    {"name": "Walk or Cycle 🚲",        "description": "Choose legs over a car today",         "color": "#a0c8a0", "icon": "🚲", "category": "Sustainability"},
-    {"name": "Buy Nothing New 🛍️",     "description": "Go a day without purchasing anything",  "color": "#c8b0a0", "icon": "🛍️", "category": "Sustainability"},
-    {"name": "Compost Scraps 🌿",       "description": "Compost food scraps instead of binning","color": "#a8bc80", "icon": "🌿", "category": "Sustainability"},
-]
-
 # ── Auth helpers ───────────────────────────────────────────────────────────────
 def login_required(f):
     from functools import wraps
@@ -452,7 +379,6 @@ def dashboard():
 
     return render_template('dashboard.html',
         user=user,
-        current_hour=datetime.now().hour,
         today_checkin=today_checkin,
         habits=habits,
         habit_status=habit_status,
@@ -647,7 +573,6 @@ def habits():
     cur = conn.cursor()
     cur.execute("SELECT * FROM habits WHERE user_id=%s AND active=TRUE ORDER BY created_at", (user['id'],))
     habits_list = cur.fetchall()
-
     today_logs = {}
     week_stats = {}
     for h in habits_list:
@@ -667,7 +592,7 @@ def habits():
     return render_template('habits.html',
         user=user,
         habits=habits_list,
-        habit_status=today_logs,
+        today_logs=today_logs,
         week_stats=week_stats,
         today=date.today()
     )
@@ -731,64 +656,6 @@ def delete_habit(habit_id):
     cur.close(); conn.close()
     flash('Habit removed.', 'info')
     return redirect(url_for('habits'))
-
-
-@app.route('/habits/pause/<int:habit_id>', methods=['POST'])
-@login_required
-def pause_habit(habit_id):
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("SELECT paused FROM habits WHERE id=%s AND user_id=%s AND active=TRUE",
-                (habit_id, session['user_id']))
-    habit = cur.fetchone()
-    if habit:
-        new_state = not habit['paused']
-        cur.execute("UPDATE habits SET paused=%s WHERE id=%s AND user_id=%s",
-                    (new_state, habit_id, session['user_id']))
-        conn.commit()
-        msg = 'Habit paused. No streaks affected. 🌿' if new_state else 'Habit resumed! 🌱'
-        flash(msg, 'info')
-    cur.close(); conn.close()
-    return redirect(url_for('habits'))
-
-@app.route('/habits/library')
-@login_required
-def habit_library():
-    user = get_current_user()
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("SELECT name FROM habits WHERE user_id=%s AND active=TRUE", (session['user_id'],))
-    existing_names = {row['name'] for row in cur.fetchall()}
-    cur.close(); conn.close()
-    return render_template('habit_library.html',
-        user=user,
-        library=HABIT_LIBRARY,
-        existing_names=existing_names
-    )
-
-@app.route('/habits/library/add', methods=['POST'])
-@login_required
-def add_from_library():
-    name = request.form.get('name', '').strip()
-    description = request.form.get('description', '').strip()
-    color = request.form.get('color', '#86b49c')
-    icon = request.form.get('icon', '✿')
-    if name:
-        conn = get_db()
-        cur = conn.cursor()
-        cur.execute("SELECT id FROM habits WHERE user_id=%s AND name=%s AND active=TRUE",
-                    (session['user_id'], name))
-        if not cur.fetchone():
-            cur.execute("""
-                INSERT INTO habits (user_id, name, description, color, icon)
-                VALUES (%s, %s, %s, %s, %s)
-            """, (session['user_id'], name, description, color, icon))
-            conn.commit()
-            flash(f'{name} added to your habits! 🌱', 'success')
-        else:
-            flash('You already have this habit.', 'info')
-        cur.close(); conn.close()
-    return redirect(url_for('habit_library'))
 
 # ── PERIOD TRACKING ───────────────────────────────────────────────────────────
 
@@ -884,6 +751,7 @@ def settings():
     cur.close(); conn.close()
 
     return render_template('settings.html', user=user, recent_periods=recent_periods)
+# ⬇️⬇️⬇️ IMPORTANT: BLANK LINE + FLUSH-LEFT DECORATORS ⬇️⬇️⬇️
 # ── Suggestions ─────────────────────────────────────────────────────────────────
 @app.route('/api/suggestions')
 @login_required
@@ -993,200 +861,11 @@ def generate_suggestion_for_user(user_id):
     )
 
     return suggestion
-
-# ── Emotional Patterns ─────────────────────────────────────────────────────────────────
-@app.route('/api/emotional-patterns')
-@login_required
-def emotional_patterns():
-    user_id = session['user_id']
-    insight = generate_emotional_pattern(user_id)
-    return jsonify(insight)
-def generate_emotional_pattern(user_id):
-    conn = get_db()
-    cur = conn.cursor()
-
-    # Get last 30 days of checkins
-    cur.execute("""
-        SELECT mood, energy, pain_level, checkin_date
-        FROM checkins
-        WHERE user_id=%s AND checkin_date >= %s
-        ORDER BY checkin_date DESC
-    """, (user_id, date.today() - timedelta(days=30)))
-    rows = cur.fetchall()
-
-    cur.close(); conn.close()
-
-    if len(rows) < 5:
-        return {
-            "title": "Emotional Pattern",
-            "message": "As you continue checking in, Bloom will help you notice gentle emotional patterns over time."
-        }
-
-    # Average mood by week
-    moods = [r['mood'] for r in rows]
-    avg_mood = sum(moods) / len(moods)
-
-    # Simple insight examples
-    if avg_mood <= 2.5:
-        return {
-            "title": "Emotional Pattern",
-            "message": "Your recent check‑ins show a trend toward lower moods. You might consider adding a grounding or comforting activity this week."
-        }
-
-    if avg_mood >= 4:
-        return {
-            "title": "Emotional Pattern",
-            "message": "You've logged brighter moods recently. This could be a lovely time to nurture creativity or connection."
-        }
-
-    return {
-        "title": "Emotional Pattern",
-        "message": "Your emotional patterns this month show a gentle balance. Staying aware of your feelings can help you stay grounded."
-    }
-@app.route('/api/save-insight', methods=['POST'])
-@login_required
-def save_insight():
-    user_id = session['user_id']
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("INSERT INTO emotional_insights (user_id, saved_at) VALUES (%s, NOW())", (user_id,))
-    conn.commit()
-    cur.close(); conn.close()
-    return jsonify({"status": "saved"})
-
-@app.route('/emotional-patterns')
-@login_required
-def emotional_patterns_page():
-    user_id = session['user_id']
-
-    conn = get_db()
-    cur = conn.cursor()
-
-    cur.execute("""
-        SELECT mood, energy, pain_level, checkin_date
-        FROM checkins
-        WHERE user_id=%s AND checkin_date >= %s
-        ORDER BY checkin_date ASC
-    """, (user_id, date.today() - timedelta(days=90)))
-
-    rows = cur.fetchall()
-    cur.close();
-    conn.close()
-
-    # FIXED: use dict keys instead of tuple indexes
-    data = [
-        {
-            "mood": r["mood"],
-            "energy": r["energy"],
-            "pain": r["pain_level"],
-            "date": r["checkin_date"]
-        }
-        for r in rows
-    ]
-
-    # ------------------------------
-    # 1. WEEKLY EMOTIONAL RHYTHM
-    # ------------------------------
-    weekly = {i: [] for i in range(7)}  # 0=Mon
-    for entry in data:
-        weekday = entry["date"].weekday()
-        weekly[weekday].append(entry["mood"])
-
-    weekly_avg = [
-        round(sum(vals)/len(vals), 2) if vals else None
-        for vals in weekly.values()
-    ]
-
-    # ------------------------------
-    # 2. MOOD–ENERGY CORRELATION
-    # ------------------------------
-    moods = [d["mood"] for d in data]
-    energies = [d["energy"] for d in data]
-
-    if len(moods) > 1:
-        import numpy as np
-        correlation = float(np.corrcoef(moods, energies)[0][1])
-    else:
-        correlation = None
-
-    # ------------------------------
-    # 3. PERIOD‑RELATED EMOTIONAL PATTERNS
-    # ------------------------------
-    # Pull period logs
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT start_date, end_date
-        FROM periods
-        WHERE user_id=%s
-        ORDER BY start_date DESC
-        LIMIT 3
-    """, (user_id,))
-    periods = cur.fetchall()
-    cur.close(); conn.close()
-
-    period_curve = {"-3": [], "-2": [], "-1": [], "0": [], "+1": [], "+2": [], "+3": []}
-
-    for entry in data:
-        for period in periods:
-            start = period["start_date"]
-            if isinstance(start, str):
-                start = date.fromisoformat(start)
-            delta = (entry["date"] - start).days
-            if -3 <= delta <= 3:
-                key = f"+{delta}" if delta > 0 else str(delta)
-                period_curve[key].append(entry["mood"])
-
-    period_avg = {
-        k: (round(sum(v)/len(v), 2) if v else None)
-        for k, v in period_curve.items()
-    }
-
-    # ------------------------------
-    # 4. CYCLE PHASE EMOTIONS
-    # ------------------------------
-    # Simple phase classifier
-    def get_phase(day):
-        if 0 <= day <= 5:
-            return "menstrual"
-        if 6 <= day <= 13:
-            return "follicular"
-        if 14 <= day <= 16:
-            return "ovulation"
-        return "luteal"
-
-    phase_map = {"menstrual": [], "follicular": [], "ovulation": [], "luteal": []}
-
-    for entry in data:
-        for period in periods:
-            start = period["start_date"]
-            if isinstance(start, str):
-                start = date.fromisoformat(start)
-            cycle_day = (entry["date"] - start).days
-            if 0 <= cycle_day <= 28:
-                phase = get_phase(cycle_day)
-                phase_map[phase].append(entry["mood"])
-
-    phase_avg = {
-        phase: (round(sum(vals)/len(vals), 2) if vals else None)
-        for phase, vals in phase_map.items()
-    }
-
-    return render_template(
-        "emotional_patterns.html",
-        weekly_avg=weekly_avg,
-        correlation=correlation,
-        period_avg=period_avg,
-        phase_avg=phase_avg,
-        data=data
-    )
-
 # ── Run ───────────────────────────────────────────────────────────────────────
 
 with app.app_context():
     try:
         init_db()
-        migrate_db()
     except Exception as e:
         print(f"DB init warning: {e}")
 
