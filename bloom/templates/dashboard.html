@@ -127,7 +127,7 @@
           <div class="checkin-row">
             <span class="ci-label">Pain</span>
             <div class="ci-dots">
-              {% for i in range(0, 6) %}
+              {% for i in range(1, 6) %}
                 <span class="ci-dot pain {% if i <= today_checkin.pain_level and today_checkin.pain_level > 0 %}filled{% endif %}">●</span>
               {% endfor %}
             </div>

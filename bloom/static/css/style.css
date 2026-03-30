@@ -180,7 +180,7 @@ em { font-style: italic; color: var(--rose); }
   border-radius: var(--radius-sm);
   font-family: var(--font-body);
   font-size: 0.9rem;
-  background: var(--white);
+  background: #fffdf9;
   color: var(--ink);
   transition: border-color 0.2s, box-shadow 0.2s;
   width: 100%;
