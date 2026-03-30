@@ -1344,6 +1344,96 @@ def get_notifications():
 
     return jsonify({'notifications': notifications, 'count': len(notifications)})
 
+@app.route('/api/planning')
+@login_required
+def api_planning():
+    user_id = session['user_id']
+
+    conn = get_db()
+    cur = conn.cursor()  # your cursor already returns dict-like rows
+
+    cur.execute("""
+        SELECT start_date, end_date
+        FROM periods
+        WHERE user_id = %s
+        ORDER BY start_date DESC
+        LIMIT 12
+    """, (user_id,))
+
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    # rows are dict-like, so use keys
+    periods = [
+        {"start_date": row["start_date"], "end_date": row["end_date"]}
+        for row in rows
+    ]
+
+    prediction = compute_cycle_prediction(periods)
+
+    return prediction
+
+def compute_cycle_prediction(periods):
+    base = {
+        "status": None,
+        "message": None,
+        "next_period": None,
+        "range_start": None,
+        "range_end": None,
+        "avg_cycle_length": None,
+        "min_cycle_length": None,
+        "max_cycle_length": None,
+        "cycle_count": len(periods),
+        "cycle_length": None
+    }
+
+    if len(periods) == 0:
+        base["status"] = "no_data"
+        base["message"] = "Log your first period to begin predictions."
+        return base
+
+    if len(periods) == 1:
+        start = periods[0]["start_date"]
+        end = periods[0]["end_date"]
+        cycle_length = (end - start).days if end else 28
+
+        base.update({
+            "status": "single_cycle",
+            "cycle_length": cycle_length,
+            "next_period": start + timedelta(days=cycle_length),
+            "message": "Predictions will improve as you log more cycles."
+        })
+        return base
+
+    cycle_lengths = []
+    for i in range(len(periods) - 1):
+        length = (periods[i]["start_date"] - periods[i+1]["start_date"]).days
+        if length > 10:
+            cycle_lengths.append(length)
+
+    if not cycle_lengths:
+        base["status"] = "no_valid_cycles"
+        base["message"] = "Not enough valid cycle data to predict."
+        return base
+
+    avg_len = round(sum(cycle_lengths) / len(cycle_lengths))
+    min_len = min(cycle_lengths)
+    max_len = max(cycle_lengths)
+    last_start = periods[0]["start_date"]
+
+    base.update({
+        "status": "ok",
+        "avg_cycle_length": avg_len,
+        "min_cycle_length": min_len,
+        "max_cycle_length": max_len,
+        "next_period": last_start + timedelta(days=avg_len),
+        "range_start": last_start + timedelta(days=min_len),
+        "range_end": last_start + timedelta(days=max_len)
+    })
+
+    return base
+
 
 
 # ── Run ───────────────────────────────────────────────────────────────────────
