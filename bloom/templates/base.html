@@ -37,6 +37,8 @@
       </a></li>
      <li><a href="{{ url_for('reflect') }}" class="nav-link {% if request.endpoint == 'reflect' %}active{% endif %}">
         <span class="nav-icon">✍</span><span>Reflect</span>
+     <li><a href="{{ url_for('emotional_patterns_page') }}" class="nav-link {% if request.endpoint == 'emotional_patterns_page' %}active{% endif %}">
+        <span class="nav-icon">📊</span><span>Insights</span>
      </a></li>
     </ul>
     <!-- Notification Bell -->
