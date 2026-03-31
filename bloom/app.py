@@ -1391,8 +1391,9 @@ def api_planning():
     user_id = session['user_id']
 
     conn = get_db()
-    cur = conn.cursor()  # your cursor already returns dict-like rows
+    cur = conn.cursor()
 
+    # Fetch periods
     cur.execute("""
         SELECT start_date, end_date
         FROM periods
@@ -1400,22 +1401,41 @@ def api_planning():
         ORDER BY start_date DESC
         LIMIT 12
     """, (user_id,))
-
     rows = cur.fetchall()
+
+    # Fetch user cycle settings
+    cur.execute("""
+        SELECT cycle_length, period_length, last_period_date
+        FROM users
+        WHERE id = %s
+    """, (user_id,))
+    user = cur.fetchone()
+
     cur.close()
     conn.close()
 
-    # rows are dict-like, so use keys
+    # Convert user row to dict
+    user = dict(user) if user else {}
+
+    # Convert periods to list of dicts
     periods = [
         {"start_date": row["start_date"], "end_date": row["end_date"]}
         for row in rows
     ]
 
-    prediction = compute_cycle_prediction(periods)
+    # IMPORTANT: pass user into the function
+    prediction = compute_cycle_prediction(periods, user)
+
+    # Convert datetime objects to strings
+    def serialize(d):
+        return d.isoformat() if hasattr(d, "isoformat") else d
+
+    for key in ["next_period", "range_start", "range_end"]:
+        prediction[key] = serialize(prediction.get(key))
 
     return prediction
 
-def compute_cycle_prediction(periods):
+def compute_cycle_prediction(periods, user):
     base = {
         "status": None,
         "message": None,
@@ -1429,24 +1449,33 @@ def compute_cycle_prediction(periods):
         "cycle_length": None
     }
 
+    # No period data
     if len(periods) == 0:
         base["status"] = "no_data"
         base["message"] = "Log your first period to begin predictions."
         return base
 
-    if len(periods) == 1:
-        start = periods[0]["start_date"]
-        end = periods[0]["end_date"]
-        cycle_length = (end - start).days if end else 28
+    # User settings
+    user_cycle = user.get("cycle_length")
+    user_period_len = user.get("period_length") or 5
+
+    # If user manually set cycle length → use it
+    if user_cycle:
+        last_start = periods[0]["start_date"]
+        next_start = last_start + timedelta(days=user_cycle)
+        next_end = next_start + timedelta(days=user_period_len - 1)
 
         base.update({
-            "status": "single_cycle",
-            "cycle_length": cycle_length,
-            "next_period": start + timedelta(days=cycle_length),
-            "message": "Predictions will improve as you log more cycles."
+            "status": "user_defined",
+            "cycle_length": user_cycle,
+            "next_period": next_start,
+            "range_start": next_start,
+            "range_end": next_end,
+
         })
         return base
 
+    # Otherwise calculate from history
     cycle_lengths = []
     for i in range(len(periods) - 1):
         length = (periods[i]["start_date"] - periods[i+1]["start_date"]).days
@@ -1463,14 +1492,18 @@ def compute_cycle_prediction(periods):
     max_len = max(cycle_lengths)
     last_start = periods[0]["start_date"]
 
+    next_start = last_start + timedelta(days=avg_len)
+    next_end = next_start + timedelta(days=user_period_len - 1)
+
     base.update({
         "status": "ok",
         "avg_cycle_length": avg_len,
         "min_cycle_length": min_len,
         "max_cycle_length": max_len,
-        "next_period": last_start + timedelta(days=avg_len),
-        "range_start": last_start + timedelta(days=min_len),
-        "range_end": last_start + timedelta(days=max_len)
+        "next_period": next_start,
+        "range_start": next_start,
+        "range_end": next_end,
+        "cycle_length": avg_len
     })
 
     return base
