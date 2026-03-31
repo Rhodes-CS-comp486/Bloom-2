@@ -8,6 +8,7 @@ import psycopg2.extras
 import os
 import json
 import math
+import anthropic
 
 load_dotenv()
 
@@ -1062,8 +1063,6 @@ def emotional_patterns():
 def generate_emotional_pattern(user_id):
     conn = get_db()
     cur = conn.cursor()
-
-    # Get last 30 days of checkins
     cur.execute("""
         SELECT mood, energy, pain_level, checkin_date
         FROM checkins
@@ -1071,35 +1070,54 @@ def generate_emotional_pattern(user_id):
         ORDER BY checkin_date DESC
     """, (user_id, date.today() - timedelta(days=30)))
     rows = cur.fetchall()
-
     cur.close(); conn.close()
 
-    if len(rows) < 5:
+    if not rows:
         return {
             "title": "Emotional Pattern",
             "message": "As you continue checking in, Bloom will help you notice gentle emotional patterns over time."
         }
 
-    # Average mood by week
-    moods = [r['mood'] for r in rows]
-    avg_mood = sum(moods) / len(moods)
+    # Build a summary to send to Claude
+    latest = rows[0]
+    mood_labels = {1:'terrible', 2:'low', 3:'okay', 4:'good', 5:'great'}
+    energy_labels = {1:'depleted', 2:'low', 3:'medium', 4:'high', 5:'very high'}
 
-    # Simple insight examples
-    if avg_mood <= 2.5:
-        return {
-            "title": "Emotional Pattern",
-            "message": "Your recent check‑ins show a trend toward lower moods. You might consider adding a grounding or comforting activity this week."
-        }
+    if len(rows) == 1:
+        prompt = (
+            f"A user just logged their first wellness check-in. "
+            f"Mood: {mood_labels.get(latest['mood'], 'okay')}, "
+            f"Energy: {energy_labels.get(latest['energy'], 'medium')}, "
+            f"Pain level: {latest['pain_level']}/5. "
+            f"Write a warm, encouraging 1-2 sentence message welcoming them and reflecting on how they're feeling today. "
+            f"Keep it gentle and personal. Do not use the word 'I'."
+        )
+    else:
+        avg_mood = round(sum(r['mood'] for r in rows) / len(rows), 1)
+        avg_energy = round(sum(r['energy'] for r in rows) / len(rows), 1)
+        prompt = (
+            f"A user has logged {len(rows)} wellness check-ins over the past 30 days. "
+            f"Average mood: {avg_mood}/5, average energy: {avg_energy}/5. "
+            f"Most recent mood: {mood_labels.get(latest['mood'], 'okay')}, "
+            f"energy: {energy_labels.get(latest['energy'], 'medium')}. "
+            f"Write a warm, insightful 1-2 sentence message about their emotional patterns. "
+            f"Keep it gentle and personal. Do not use the word 'I'."
+        )
 
-    if avg_mood >= 4:
-        return {
-            "title": "Emotional Pattern",
-            "message": "You've logged brighter moods recently. This could be a lovely time to nurture creativity or connection."
-        }
+    try:
+        client = anthropic.Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
+        response = client.messages.create(
+            model="claude-opus-4-5",
+            max_tokens=150,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        message = response.content[0].text.strip()
+    except Exception:
+        message = "Your check-in patterns are taking shape. Keep tracking to reveal your emotional rhythms."
 
     return {
         "title": "Emotional Pattern",
-        "message": "Your emotional patterns this month show a gentle balance. Staying aware of your feelings can help you stay grounded."
+        "message": message
     }
 @app.route('/api/save-insight', methods=['POST'])
 @login_required
@@ -1186,11 +1204,13 @@ def emotional_patterns_page():
     period_curve = {"-3": [], "-2": [], "-1": [], "0": [], "+1": [], "+2": [], "+3": []}
 
     for entry in data:
-        for start, end in periods:
+        for p in periods:
+            start = p['start_date']
             delta = (entry["date"] - start).days
             if -3 <= delta <= 3:
-                key = str(delta)
-                period_curve[key].append(entry["mood"])
+                key = f"+{delta}" if delta > 0 else str(delta)
+                if key in period_curve:
+                    period_curve[key].append(entry["mood"])
 
     period_avg = {
         k: (round(sum(v)/len(v), 2) if v else None)
@@ -1213,7 +1233,8 @@ def emotional_patterns_page():
     phase_map = {"menstrual": [], "follicular": [], "ovulation": [], "luteal": []}
 
     for entry in data:
-        for start, end in periods:
+        for p in periods:
+            start = p['start_date']
             cycle_day = (entry["date"] - start).days
             if 0 <= cycle_day <= 28:
                 phase = get_phase(cycle_day)

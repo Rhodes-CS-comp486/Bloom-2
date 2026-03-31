@@ -56,7 +56,7 @@
       <h2>Pain / Discomfort</h2>
       <p class="ci-section-desc">Any physical discomfort today? (0 = none)</p>
       <div class="pain-scale">
-        {% for i in range(0, 6) %}
+        {% for i in range(1, 6) %}
         <label class="pain-option {% if existing and existing.pain_level == i %}selected{% endif %}">
           <input type="radio" name="pain_level" value="{{ i }}"
                  {% if (not existing and i == 0) or (existing and existing.pain_level == i) %}checked{% endif %}/>

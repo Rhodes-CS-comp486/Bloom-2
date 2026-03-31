@@ -127,7 +127,7 @@
           <div class="checkin-row">
             <span class="ci-label">Pain</span>
             <div class="ci-dots">
-              {% for i in range(0, 6) %}
+              {% for i in range(1, 6) %}
                 <span class="ci-dot pain {% if i <= today_checkin.pain_level and today_checkin.pain_level > 0 %}filled{% endif %}">●</span>
               {% endfor %}
             </div>
@@ -143,17 +143,6 @@
         </div>
       {% endif %}
     </div>
-
-      <!-- Emotional Patterns-->
-      <div id="emotional-patterns-card" class="insight-card hidden">
-    <div class="insight-header">
-        <h3 class="insight-title">Emotional Pattern</h3>
-
-        <a href="{{ url_for('emotional_patterns_page') }}" class="view-pattern-link">
-            View Pattern →
-        </a>
-    </div>
-
     <p class="insight-message"></p>
 
     <div class="insight-actions">
@@ -283,21 +272,6 @@ async function toggleHabit(habitId, btn) {
 document.addEventListener("DOMContentLoaded", function () {
     const today = Date.now() + 60 * 1000;
 
-    /* ------------------------------
-       EMOTIONAL PATTERNS (dismiss until tomorrow)
-    ------------------------------ */
-    const dismissedInsight = localStorage.getItem("dismissInsightDate");
-
-    if (dismissedInsight !== today) {
-        fetch("/api/emotional-patterns")
-            .then(res => res.json())
-            .then(data => {
-                if (!data || !data.message) return;
-                document.querySelector(".insight-title").innerText = data.title;
-                document.querySelector(".insight-message").innerText = data.message;
-                document.getElementById("emotional-patterns-card").classList.remove("hidden");
-            });
-    }
 
     /* ------------------------------
        SUGGESTIONS (dismiss until tomorrow)
@@ -358,22 +332,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
 });
 
-/* ------------------------------
-   DISMISS EMOTIONAL PATTERN
------------------------------- */
-function dismissInsight() {
-    const today = Date.now() + 60 * 1000;
-    localStorage.setItem("dismissInsightDate", today);
-    document.getElementById("emotional-patterns-card").classList.add("hidden");
-}
-
-function saveInsight() {
-    fetch("/api/save-insight", { method: "POST" })
-        .then(() => {
-            alert("Insight saved.");
-            document.getElementById("emotional-patterns-card").classList.add("hidden");
-        });
-}
 
 /* ------------------------------
    DISMISS SUGGESTION
