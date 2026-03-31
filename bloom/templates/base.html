@@ -32,6 +32,9 @@
       <li><a href="{{ url_for('checkin') }}" class="nav-link {% if request.endpoint == 'checkin' %}active{% endif %}">
         <span class="nav-icon">♡</span><span>Check-in</span>
       </a></li>
+      <li><a href="{{ url_for('reflect') }}" class="nav-link {% if request.endpoint in ['reflect', 'edit_reflection', 'delete_reflection'] %}active{% endif %}">
+        <span class="nav-icon">✍</span><span>Reflect</span>
+      </a></li>
       <li><a href="{{ url_for('settings') }}" class="nav-link {% if request.endpoint == 'settings' %}active{% endif %}">
         <span class="nav-icon">⚙</span><span>Settings</span>
       </a></li>

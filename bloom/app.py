@@ -1264,8 +1264,8 @@ def reflect():
     reflections = cur.fetchall()
     cur.close()
     conn.close()
-
-    return render_template('reflect.html', user=user, reflections=reflections, today=date.today())
+    prompt = get_daily_prompt(user['id'])
+    return render_template('reflect.html', user=user, reflections=reflections, today=date.today(), prompt = prompt)
 
 @app.route('/reflect/edit/<int:reflection_id>', methods=['POST'])
 @login_required
@@ -1454,7 +1454,53 @@ def compute_cycle_prediction(periods):
 
     return base
 
+def get_daily_prompt(user_id):
+    conn = get_db()
+    cur = conn.cursor()
 
+    # Check recent mood, energy, pain
+    cur.execute("""
+        SELECT mood, energy, pain_level FROM checkins
+        WHERE user_id=%s ORDER BY checkin_date DESC LIMIT 1
+    """, (user_id,))
+    checkin = cur.fetchone()
+
+    # Get user for cycle prediction
+    cur.execute("SELECT * FROM users WHERE id=%s", (user_id,))
+    user = cur.fetchone()
+    cur.close()
+    conn.close()
+
+    # Pick category based on user context
+    category = 'general'
+    if checkin:
+        if checkin['mood'] <= 2:
+            category = 'mood'
+        elif checkin['energy'] <= 2:
+            category = 'energy'
+        elif checkin['pain_level'] >= 4:
+            category = 'body'
+
+    next_start, _ = predict_next_period(user)
+    if next_start and 0 <= (next_start - date.today()).days <= 3:
+        category = 'body'
+
+    # Fetch prompts matching that category, fall back to all prompts
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM prompts WHERE category=%s ORDER BY id", (category,))
+    prompts = cur.fetchall()
+    if not prompts:
+        cur.execute("SELECT * FROM prompts ORDER BY id")
+        prompts = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    if not prompts:
+        return None
+    day_index = date.today().toordinal() % len(prompts)
+
+    return prompts[day_index]
 
 # ── Run ───────────────────────────────────────────────────────────────────────
 
