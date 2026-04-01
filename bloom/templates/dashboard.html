@@ -145,10 +145,6 @@
     </div>
     <p class="insight-message"></p>
 
-    <div class="insight-actions">
-        <button class="insight-btn save" onclick="saveInsight()">Save</button>
-        <button class="insight-btn dismiss" onclick="dismissInsight()">Dismiss</button>
-    </div>
 </div>
 
 
@@ -191,7 +187,6 @@
 
     <div class="sug-actions">
         <button class="sug-btn accept" onclick="acceptSuggestion()">Accept</button>
-        <button class="sug-btn modify" onclick="modifySuggestion()">Modify</button>
         <button class="sug-btn dismiss" onclick="dismissSuggestion()">Dismiss</button>
     </div>
 </div>
@@ -200,7 +195,6 @@
 <div class="dash-card planning-card">
     <div class="card-header">
         <h2>Cycle Planning</h2>
-        <span class="planning-icon">🗓️</span>
     </div>
 
     <div id="planningContent">
@@ -287,7 +281,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 document.getElementById("suggestion-card").classList.remove("hidden");
             });
     }
-    fetch('/api/planning')
+fetch('/api/planning')
     .then(res => res.json())
     .then(prediction => {
         const container = document.getElementById("planningContent");
@@ -298,13 +292,13 @@ document.addEventListener("DOMContentLoaded", function () {
             return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
         }
 
+        // No data
         if (prediction.status === "no_data") {
-            container.innerHTML = `
-                <p>${prediction.message}</p>
-            `;
+
             return;
         }
 
+        // Single cycle
         if (prediction.status === "single_cycle") {
             container.innerHTML = `
                 <p>Next predicted period:</p>
@@ -314,6 +308,23 @@ document.addEventListener("DOMContentLoaded", function () {
             return;
         }
 
+        // User-defined cycle settings (THIS IS WHAT YOU WERE MISSING)
+        if (prediction.status === "user_defined") {
+            container.innerHTML = `
+                <p>Next period:</p>
+                <p class="planning-highlight">${fmt(prediction.next_period)}</p>
+
+                <p>Predicted range:</p>
+                <p class="planning-highlight">
+                    ${fmt(prediction.range_start)} – ${fmt(prediction.range_end)}
+                </p>
+
+
+            `;
+            return;
+        }
+
+        // Multiple cycles (normal prediction)
         if (prediction.status === "ok") {
             container.innerHTML = `
                 <p>Next period:</p>
@@ -327,9 +338,12 @@ document.addEventListener("DOMContentLoaded", function () {
                 <p>Average cycle length: <span class="planning-highlight">${prediction.avg_cycle_length} days</span></p>
                 <p>Cycles tracked: <span class="planning-highlight">${prediction.cycle_count}</span></p>
             `;
+            return;
         }
-    });
 
+        // Fallback for any unexpected status
+        container.innerHTML = `<p>${prediction.message || "Unable to load prediction."}</p>`;
+    });
 });
 
 
