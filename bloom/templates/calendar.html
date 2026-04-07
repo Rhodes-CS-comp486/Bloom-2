@@ -365,16 +365,19 @@ function renderMonth(body) {
 
   // Drag
   const grid = document.getElementById('mGrid');
+  let dragMoved = false;
+
   grid.addEventListener('mousedown', e => {
     const cell = e.target.closest('.month-cell[data-date]');
     if (!cell) return;
-    dragging=true; dragAnchor=cell.dataset.date;
+    dragging=true; dragMoved=false; dragAnchor=cell.dataset.date;
     e.preventDefault();
   });
   grid.addEventListener('mouseover', e => {
     if (!dragging) return;
     const cell = e.target.closest('.month-cell[data-date]');
     if (!cell) return;
+    if (cell.dataset.date !== dragAnchor) dragMoved = true;
     highlightDrag(dragAnchor, cell.dataset.date);
   });
   document.addEventListener('mouseup', e => {
@@ -383,8 +386,15 @@ function renderMonth(body) {
     const cell = e.target.closest && e.target.closest('.month-cell[data-date]');
     const endDate = cell ? cell.dataset.date : dragAnchor;
     clearDrag();
-    const [s,en] = dragAnchor<=endDate ? [dragAnchor,endDate] : [endDate,dragAnchor];
-    openQ(s, en, e);
+    if (dragMoved) {
+      // Real drag — open with range
+      const [s,en] = dragAnchor<=endDate ? [dragAnchor,endDate] : [endDate,dragAnchor];
+      openQ(s, en, e);
+    } else {
+      // Simple click — open for single day
+      openQ(dragAnchor, dragAnchor, e);
+    }
+    dragMoved = false;
   });
 }
 
@@ -687,7 +697,7 @@ function posP(popup, e) {
 }
 
 document.addEventListener('click', e=>{
-  if(!e.target.closest('#qPopup')&&!e.target.closest('#evPopup')&&!e.target.closest('.mc-event')&&!e.target.closest('.allday-ev')){ closeQ(); closeEv(); }
+  if(!e.target.closest('#qPopup')&&!e.target.closest('#evPopup')&&!e.target.closest('.mc-event')&&!e.target.closest('.allday-ev')&&!e.target.closest('.month-cell')){ closeQ(); closeEv(); }
 });
 
 // Init
