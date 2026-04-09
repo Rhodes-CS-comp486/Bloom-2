@@ -8,6 +8,7 @@ import psycopg2.extras
 import os
 import json
 import math
+import anthropic
 
 load_dotenv()
 
@@ -1062,8 +1063,6 @@ def emotional_patterns():
 def generate_emotional_pattern(user_id):
     conn = get_db()
     cur = conn.cursor()
-
-    # Get last 30 days of checkins
     cur.execute("""
         SELECT mood, energy, pain_level, checkin_date
         FROM checkins
@@ -1071,35 +1070,54 @@ def generate_emotional_pattern(user_id):
         ORDER BY checkin_date DESC
     """, (user_id, date.today() - timedelta(days=30)))
     rows = cur.fetchall()
-
     cur.close(); conn.close()
 
-    if len(rows) < 5:
+    if not rows:
         return {
             "title": "Emotional Pattern",
             "message": "As you continue checking in, Bloom will help you notice gentle emotional patterns over time."
         }
 
-    # Average mood by week
-    moods = [r['mood'] for r in rows]
-    avg_mood = sum(moods) / len(moods)
+    # Build a summary to send to Claude
+    latest = rows[0]
+    mood_labels = {1:'terrible', 2:'low', 3:'okay', 4:'good', 5:'great'}
+    energy_labels = {1:'depleted', 2:'low', 3:'medium', 4:'high', 5:'very high'}
 
-    # Simple insight examples
-    if avg_mood <= 2.5:
-        return {
-            "title": "Emotional Pattern",
-            "message": "Your recent check‑ins show a trend toward lower moods. You might consider adding a grounding or comforting activity this week."
-        }
+    if len(rows) == 1:
+        prompt = (
+            f"A user just logged their first wellness check-in. "
+            f"Mood: {mood_labels.get(latest['mood'], 'okay')}, "
+            f"Energy: {energy_labels.get(latest['energy'], 'medium')}, "
+            f"Pain level: {latest['pain_level']}/5. "
+            f"Write a warm, encouraging 1-2 sentence message welcoming them and reflecting on how they're feeling today. "
+            f"Keep it gentle and personal. Do not use the word 'I'."
+        )
+    else:
+        avg_mood = round(sum(r['mood'] for r in rows) / len(rows), 1)
+        avg_energy = round(sum(r['energy'] for r in rows) / len(rows), 1)
+        prompt = (
+            f"A user has logged {len(rows)} wellness check-ins over the past 30 days. "
+            f"Average mood: {avg_mood}/5, average energy: {avg_energy}/5. "
+            f"Most recent mood: {mood_labels.get(latest['mood'], 'okay')}, "
+            f"energy: {energy_labels.get(latest['energy'], 'medium')}. "
+            f"Write a warm, insightful 1-2 sentence message about their emotional patterns. "
+            f"Keep it gentle and personal. Do not use the word 'I'."
+        )
 
-    if avg_mood >= 4:
-        return {
-            "title": "Emotional Pattern",
-            "message": "You've logged brighter moods recently. This could be a lovely time to nurture creativity or connection."
-        }
+    try:
+        client = anthropic.Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
+        response = client.messages.create(
+            model="claude-opus-4-5",
+            max_tokens=150,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        message = response.content[0].text.strip()
+    except Exception:
+        message = "Your check-in patterns are taking shape. Keep tracking to reveal your emotional rhythms."
 
     return {
         "title": "Emotional Pattern",
-        "message": "Your emotional patterns this month show a gentle balance. Staying aware of your feelings can help you stay grounded."
+        "message": message
     }
 @app.route('/api/save-insight', methods=['POST'])
 @login_required
@@ -1186,11 +1204,13 @@ def emotional_patterns_page():
     period_curve = {"-3": [], "-2": [], "-1": [], "0": [], "+1": [], "+2": [], "+3": []}
 
     for entry in data:
-        for start, end in periods:
+        for p in periods:
+            start = p['start_date']
             delta = (entry["date"] - start).days
             if -3 <= delta <= 3:
-                key = str(delta)
-                period_curve[key].append(entry["mood"])
+                key = f"+{delta}" if delta > 0 else str(delta)
+                if key in period_curve:
+                    period_curve[key].append(entry["mood"])
 
     period_avg = {
         k: (round(sum(v)/len(v), 2) if v else None)
@@ -1213,7 +1233,8 @@ def emotional_patterns_page():
     phase_map = {"menstrual": [], "follicular": [], "ovulation": [], "luteal": []}
 
     for entry in data:
-        for start, end in periods:
+        for p in periods:
+            start = p['start_date']
             cycle_day = (entry["date"] - start).days
             if 0 <= cycle_day <= 28:
                 phase = get_phase(cycle_day)
@@ -1370,8 +1391,9 @@ def api_planning():
     user_id = session['user_id']
 
     conn = get_db()
-    cur = conn.cursor()  # your cursor already returns dict-like rows
+    cur = conn.cursor()
 
+    # Fetch periods
     cur.execute("""
         SELECT start_date, end_date
         FROM periods
@@ -1379,22 +1401,41 @@ def api_planning():
         ORDER BY start_date DESC
         LIMIT 12
     """, (user_id,))
-
     rows = cur.fetchall()
+
+    # Fetch user cycle settings
+    cur.execute("""
+        SELECT cycle_length, period_length, last_period_date
+        FROM users
+        WHERE id = %s
+    """, (user_id,))
+    user = cur.fetchone()
+
     cur.close()
     conn.close()
 
-    # rows are dict-like, so use keys
+    # Convert user row to dict
+    user = dict(user) if user else {}
+
+    # Convert periods to list of dicts
     periods = [
         {"start_date": row["start_date"], "end_date": row["end_date"]}
         for row in rows
     ]
 
-    prediction = compute_cycle_prediction(periods)
+    # IMPORTANT: pass user into the function
+    prediction = compute_cycle_prediction(periods, user)
+
+    # Convert datetime objects to strings
+    def serialize(d):
+        return d.isoformat() if hasattr(d, "isoformat") else d
+
+    for key in ["next_period", "range_start", "range_end"]:
+        prediction[key] = serialize(prediction.get(key))
 
     return prediction
 
-def compute_cycle_prediction(periods):
+def compute_cycle_prediction(periods, user):
     base = {
         "status": None,
         "message": None,
@@ -1408,24 +1449,33 @@ def compute_cycle_prediction(periods):
         "cycle_length": None
     }
 
+    # No period data
     if len(periods) == 0:
         base["status"] = "no_data"
         base["message"] = "Log your first period to begin predictions."
         return base
 
-    if len(periods) == 1:
-        start = periods[0]["start_date"]
-        end = periods[0]["end_date"]
-        cycle_length = (end - start).days if end else 28
+    # User settings
+    user_cycle = user.get("cycle_length")
+    user_period_len = user.get("period_length") or 5
+
+    # If user manually set cycle length → use it
+    if user_cycle:
+        last_start = periods[0]["start_date"]
+        next_start = last_start + timedelta(days=user_cycle)
+        next_end = next_start + timedelta(days=user_period_len - 1)
 
         base.update({
-            "status": "single_cycle",
-            "cycle_length": cycle_length,
-            "next_period": start + timedelta(days=cycle_length),
-            "message": "Predictions will improve as you log more cycles."
+            "status": "user_defined",
+            "cycle_length": user_cycle,
+            "next_period": next_start,
+            "range_start": next_start,
+            "range_end": next_end,
+
         })
         return base
 
+    # Otherwise calculate from history
     cycle_lengths = []
     for i in range(len(periods) - 1):
         length = (periods[i]["start_date"] - periods[i+1]["start_date"]).days
@@ -1442,14 +1492,18 @@ def compute_cycle_prediction(periods):
     max_len = max(cycle_lengths)
     last_start = periods[0]["start_date"]
 
+    next_start = last_start + timedelta(days=avg_len)
+    next_end = next_start + timedelta(days=user_period_len - 1)
+
     base.update({
         "status": "ok",
         "avg_cycle_length": avg_len,
         "min_cycle_length": min_len,
         "max_cycle_length": max_len,
-        "next_period": last_start + timedelta(days=avg_len),
-        "range_start": last_start + timedelta(days=min_len),
-        "range_end": last_start + timedelta(days=max_len)
+        "next_period": next_start,
+        "range_start": next_start,
+        "range_end": next_end,
+        "cycle_length": avg_len
     })
 
     return base
