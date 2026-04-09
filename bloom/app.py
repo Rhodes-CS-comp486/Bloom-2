@@ -8,7 +8,6 @@ import psycopg2.extras
 import os
 import json
 import math
-import anthropic
 
 load_dotenv()
 
@@ -35,7 +34,6 @@ def get_db():
 def init_db():
     conn = get_db()
     cur = conn.cursor()
-
     cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id SERIAL PRIMARY KEY,
@@ -52,10 +50,7 @@ def init_db():
             contraceptive_method VARCHAR(100),
             trying_to_conceive BOOLEAN DEFAULT FALSE,
             created_at TIMESTAMP DEFAULT NOW()
-        )
-    """)
-
-    cur.execute("""
+        );
         CREATE TABLE IF NOT EXISTS periods (
             id SERIAL PRIMARY KEY,
             user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -64,10 +59,7 @@ def init_db():
             flow_intensity VARCHAR(20),
             notes TEXT,
             created_at TIMESTAMP DEFAULT NOW()
-        )
-    """)
-
-    cur.execute("""
+        );
         CREATE TABLE IF NOT EXISTS habits (
             id SERIAL PRIMARY KEY,
             user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -78,10 +70,7 @@ def init_db():
             icon VARCHAR(50) DEFAULT '✿',
             active BOOLEAN DEFAULT TRUE,
             created_at TIMESTAMP DEFAULT NOW()
-        )
-    """)
-
-    cur.execute("""
+        );
         CREATE TABLE IF NOT EXISTS habit_logs (
             id SERIAL PRIMARY KEY,
             habit_id INTEGER REFERENCES habits(id) ON DELETE CASCADE,
@@ -90,10 +79,7 @@ def init_db():
             completed BOOLEAN DEFAULT TRUE,
             created_at TIMESTAMP DEFAULT NOW(),
             UNIQUE(habit_id, log_date)
-        )
-    """)
-
-    cur.execute("""
+        );
         CREATE TABLE IF NOT EXISTS checkins (
             id SERIAL PRIMARY KEY,
             user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -105,10 +91,7 @@ def init_db():
             notes TEXT,
             created_at TIMESTAMP DEFAULT NOW(),
             UNIQUE(user_id, checkin_date)
-        )
-    """)
-
-    cur.execute("""
+        );
         CREATE TABLE IF NOT EXISTS garden_items (
             id SERIAL PRIMARY KEY,
             user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -118,28 +101,12 @@ def init_db():
             position_y FLOAT DEFAULT 50.0,
             earned_at TIMESTAMP DEFAULT NOW(),
             last_watered TIMESTAMP DEFAULT NOW()
-        )
+        );
     """)
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS suggestions (
-            id SERIAL PRIMARY KEY,
-            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-            title VARCHAR(100) NOT NULL DEFAULT 'Recommendation',
-            message TEXT NOT NULL,
-            category VARCHAR(50),
-            status VARCHAR(20) NOT NULL DEFAULT 'unread'
-                CHECK (status IN ('unread', 'accepted', 'modified', 'dismissed')),
-            modified_message TEXT,
-            dismissible BOOLEAN DEFAULT TRUE,
-            created_at TIMESTAMP DEFAULT NOW(),
-            responded_at TIMESTAMP
-        )
-    """)
-
     conn.commit()
     cur.close()
     conn.close()
+
 
 def migrate_db():
     """Safely add new columns to existing tables."""
@@ -581,8 +548,7 @@ def calendar_view():
 
     # Serialize for JSON
     periods_json = [
-        {'id': p['id'], 'start': str(p['start_date']),
-         'end': str(p['end_date']) if p['end_date'] else str(p['start_date']),
+        {'id': p['id'], 'start': str(p['start_date']), 'end': str(p['end_date']) if p['end_date'] else str(p['start_date']),
          'flow': p['flow_intensity'], 'notes': p['notes'], 'actual': True}
         for p in periods
     ]
@@ -861,31 +827,6 @@ def delete_period(period_id):
     cur.close(); conn.close()
     return jsonify({'success': True})
 
-@app.route('/period/edit/<int:period_id>', methods=['POST'])
-@login_required
-def edit_period(period_id):
-    data = request.get_json()
-    start_date = data.get('start_date')
-    end_date = data.get('end_date') or None
-    flow = data.get('flow_intensity', 'medium')
-    notes = data.get('notes', '')
-    if not start_date:
-        return jsonify({'success': False, 'error': 'start_date required'}), 400
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("SELECT id FROM periods WHERE id=%s AND user_id=%s",
-                (period_id, session['user_id']))
-    if not cur.fetchone():
-        cur.close(); conn.close()
-        return jsonify({'success': False, 'error': 'not found'}), 404
-    cur.execute("""
-        UPDATE periods SET start_date=%s, end_date=%s, flow_intensity=%s, notes=%s
-        WHERE id=%s AND user_id=%s
-    """, (start_date, end_date, flow, notes, period_id, session['user_id']))
-    conn.commit()
-    cur.close(); conn.close()
-    return jsonify({'success': True})
-
 # ── API: Garden data ──────────────────────────────────────────────────────────
 
 @app.route('/api/garden')
@@ -1063,6 +1004,8 @@ def emotional_patterns():
 def generate_emotional_pattern(user_id):
     conn = get_db()
     cur = conn.cursor()
+
+    # Get last 30 days of checkins
     cur.execute("""
         SELECT mood, energy, pain_level, checkin_date
         FROM checkins
@@ -1070,54 +1013,35 @@ def generate_emotional_pattern(user_id):
         ORDER BY checkin_date DESC
     """, (user_id, date.today() - timedelta(days=30)))
     rows = cur.fetchall()
+
     cur.close(); conn.close()
 
-    if not rows:
+    if len(rows) < 5:
         return {
             "title": "Emotional Pattern",
             "message": "As you continue checking in, Bloom will help you notice gentle emotional patterns over time."
         }
 
-    # Build a summary to send to Claude
-    latest = rows[0]
-    mood_labels = {1:'terrible', 2:'low', 3:'okay', 4:'good', 5:'great'}
-    energy_labels = {1:'depleted', 2:'low', 3:'medium', 4:'high', 5:'very high'}
+    # Average mood by week
+    moods = [r['mood'] for r in rows]
+    avg_mood = sum(moods) / len(moods)
 
-    if len(rows) == 1:
-        prompt = (
-            f"A user just logged their first wellness check-in. "
-            f"Mood: {mood_labels.get(latest['mood'], 'okay')}, "
-            f"Energy: {energy_labels.get(latest['energy'], 'medium')}, "
-            f"Pain level: {latest['pain_level']}/5. "
-            f"Write a warm, encouraging 1-2 sentence message welcoming them and reflecting on how they're feeling today. "
-            f"Keep it gentle and personal. Do not use the word 'I'."
-        )
-    else:
-        avg_mood = round(sum(r['mood'] for r in rows) / len(rows), 1)
-        avg_energy = round(sum(r['energy'] for r in rows) / len(rows), 1)
-        prompt = (
-            f"A user has logged {len(rows)} wellness check-ins over the past 30 days. "
-            f"Average mood: {avg_mood}/5, average energy: {avg_energy}/5. "
-            f"Most recent mood: {mood_labels.get(latest['mood'], 'okay')}, "
-            f"energy: {energy_labels.get(latest['energy'], 'medium')}. "
-            f"Write a warm, insightful 1-2 sentence message about their emotional patterns. "
-            f"Keep it gentle and personal. Do not use the word 'I'."
-        )
+    # Simple insight examples
+    if avg_mood <= 2.5:
+        return {
+            "title": "Emotional Pattern",
+            "message": "Your recent check‑ins show a trend toward lower moods. You might consider adding a grounding or comforting activity this week."
+        }
 
-    try:
-        client = anthropic.Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
-        response = client.messages.create(
-            model="claude-opus-4-5",
-            max_tokens=150,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        message = response.content[0].text.strip()
-    except Exception:
-        message = "Your check-in patterns are taking shape. Keep tracking to reveal your emotional rhythms."
+    if avg_mood >= 4:
+        return {
+            "title": "Emotional Pattern",
+            "message": "You've logged brighter moods recently. This could be a lovely time to nurture creativity or connection."
+        }
 
     return {
         "title": "Emotional Pattern",
-        "message": message
+        "message": "Your emotional patterns this month show a gentle balance. Staying aware of your feelings can help you stay grounded."
     }
 @app.route('/api/save-insight', methods=['POST'])
 @login_required
@@ -1205,7 +1129,7 @@ def emotional_patterns_page():
 
     for entry in data:
         for p in periods:
-            start = p['start_date']
+            start = p['start_date'] if not isinstance(p['start_date'], str) else date.fromisoformat(p['start_date'])
             delta = (entry["date"] - start).days
             if -3 <= delta <= 3:
                 key = f"+{delta}" if delta > 0 else str(delta)
@@ -1234,7 +1158,7 @@ def emotional_patterns_page():
 
     for entry in data:
         for p in periods:
-            start = p['start_date']
+            start = p['start_date'] if not isinstance(p['start_date'], str) else date.fromisoformat(p['start_date'])
             cycle_day = (entry["date"] - start).days
             if 0 <= cycle_day <= 28:
                 phase = get_phase(cycle_day)
@@ -1254,6 +1178,35 @@ def emotional_patterns_page():
         data=data
     )
 
+# -- Reflection Prompts --------------------------------------------------------
+REFLECTION_PROMPTS = [
+    "What made you smile today, even briefly?",
+    "What emotion kept coming up for you this week?",
+    "When did you feel most like yourself recently?",
+    "What are you carrying right now that you could set down?",
+    "What does your body need more of today?",
+    "How is your body feeling compared to last week?",
+    "What phase of your cycle are you in, and how does that feel?",
+    "What has your energy been teaching you lately?",
+    "What would it look like to be gentler with your body today?",
+    "What physical sensation have you been ignoring?",
+    "What is something you did this week that took courage?",
+    "What belief about yourself are you ready to let go of?",
+    "What would you tell a friend going through what you are?",
+    "What small win deserves more celebration?",
+    "Where do you feel most at home?",
+    "Who showed up for you recently? Did you let them?",
+    "What boundary have you been avoiding setting?",
+    "What does love look like in your life right now?",
+    "Who do you want to reach out to, and what is stopping you?",
+    "What relationship in your life is growing?",
+    "What did this month teach you about yourself?",
+    "If your future self could send you one message, what would it be?",
+    "What are you most grateful for right now, even if it is small?",
+    "What do you want more of in your life?",
+    "What does rest mean to you, and are you getting enough?",
+]
+
 # ── Reflections ───────────────────────────────────────────────────────────────
 
 @app.route('/reflect', methods=['GET', 'POST'])
@@ -1262,47 +1215,46 @@ def reflect():
     user = get_current_user()
     conn = get_db()
     cur = conn.cursor()
-
     if request.method == 'POST':
-        content = request.form.get('content', '').strip()
-        if content:
+        entry = request.form.get('content', '').strip()
+        prompt_text = request.form.get('prompt_text', '').strip() or None
+        if entry:
             cur.execute("""
-                INSERT INTO reflections (user_id, entry_type, content) 
+                INSERT INTO reflections (user_id, entry_type, content)
                 VALUES (%s, 'free', %s)
-            """, (user['id'], content))
+            """, (user['id'], entry))
             conn.commit()
             flash('Reflection saved. 🌿', 'success')
         cur.close()
         conn.close()
         return redirect(url_for('reflect'))
-
     cur.execute("""
-        SELECT * FROM reflections
-        WHERE user_id = %s
-        ORDER BY created_at DESC
-        LIMIT 20
+        SELECT * FROM reflections WHERE user_id=%s ORDER BY created_at DESC LIMIT 20
     """, (user['id'],))
     reflections = cur.fetchall()
     cur.close()
     conn.close()
-
-    return render_template('reflect.html', user=user, reflections=reflections, today=date.today())
+    import random
+    daily_prompt = random.choice(REFLECTION_PROMPTS)
+    return render_template('reflect.html', user=user, reflections=reflections,
+                           today=date.today(), prompts=REFLECTION_PROMPTS,
+                           daily_prompt=daily_prompt)
 
 @app.route('/reflect/edit/<int:reflection_id>', methods=['POST'])
 @login_required
 def edit_reflection(reflection_id):
-    content = request.form.get('content', '').strip()
-    if content:
+    entry = request.form.get('content', '').strip()
+    if entry:
         conn = get_db()
         cur = conn.cursor()
         cur.execute("""
-            UPDATE reflections SET content = %s, updated_at = NOW()
-            WHERE id = %s AND user_id = %s
-        """, (content, reflection_id, session['user_id']))
+            UPDATE reflections SET content=%s, updated_at=NOW()
+            WHERE id=%s AND user_id=%s
+        """, (entry, reflection_id, session['user_id']))
         conn.commit()
         cur.close()
         conn.close()
-        flash("Reflection updated. 🌿", 'success')
+        flash('Reflection updated. 🌿', 'success')
     return redirect(url_for('reflect'))
 
 @app.route('/reflect/delete/<int:reflection_id>', methods=['POST'])
@@ -1310,13 +1262,96 @@ def edit_reflection(reflection_id):
 def delete_reflection(reflection_id):
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("DELETE FROM reflections WHERE id = %s AND user_id = %s",
-                    (reflection_id, session['user_id']))
+    cur.execute("DELETE FROM reflections WHERE id=%s AND user_id=%s",
+                (reflection_id, session['user_id']))
     conn.commit()
     cur.close()
     conn.close()
-    flash('Refection deleted.', 'info')
+    flash('Reflection deleted.', 'info')
     return redirect(url_for('reflect'))
+
+# -- Favorite Prompts ----------------------------------------------------------
+
+@app.route('/prompts/favorite', methods=['POST'])
+@login_required
+def toggle_favorite_prompt():
+    data = request.get_json()
+    prompt_text = (data.get('prompt') or '').strip()
+    if not prompt_text:
+        return jsonify({'error': 'no prompt'}), 400
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT id FROM favorite_prompts WHERE user_id=%s AND prompt_text=%s",
+                (session['user_id'], prompt_text))
+    existing = cur.fetchone()
+    if existing:
+        cur.execute("DELETE FROM favorite_prompts WHERE id=%s", (existing['id'],))
+        favorited = False
+    else:
+        cur.execute("INSERT INTO favorite_prompts (user_id, prompt_text) VALUES (%s, %s)",
+                    (session['user_id'], prompt_text))
+        favorited = True
+    conn.commit()
+    cur.close()
+    conn.close()
+    return jsonify({'favorited': favorited})
+
+@app.route('/prompts/favorites')
+@login_required
+def favorite_prompts_page():
+    user = get_current_user()
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT prompt_text, created_at FROM favorite_prompts "
+        "WHERE user_id=%s ORDER BY created_at DESC",
+        (session['user_id'],)
+    )
+    favorites = cur.fetchall()
+    cur.close()
+    conn.close()
+    return render_template('favorite_prompts.html', user=user, favorites=favorites)
+
+@app.route('/api/prompts/favorites')
+@login_required
+def api_favorite_prompts():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT prompt_text FROM favorite_prompts WHERE user_id=%s",
+                (session['user_id'],))
+    favs = [row['prompt_text'] for row in cur.fetchall()]
+    cur.close()
+    conn.close()
+    return jsonify({'favorites': favs})
+
+# ── Period edit ───────────────────────────────────────────────────────────────
+
+@app.route('/period/edit/<int:period_id>', methods=['POST'])
+@login_required
+def edit_period(period_id):
+    data = request.get_json()
+    start_date = data.get('start_date')
+    end_date = data.get('end_date') or None
+    flow = data.get('flow_intensity', 'medium')
+    notes = data.get('notes', '')
+    if not start_date:
+        return jsonify({'success': False, 'error': 'start_date required'}), 400
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT id FROM periods WHERE id=%s AND user_id=%s",
+                (period_id, session['user_id']))
+    if not cur.fetchone():
+        cur.close(); conn.close()
+        return jsonify({'success': False, 'error': 'not found'}), 404
+    cur.execute("""
+        UPDATE periods SET start_date=%s, end_date=%s, flow_intensity=%s, notes=%s
+        WHERE id=%s AND user_id=%s
+    """, (start_date, end_date, flow, notes, period_id, session['user_id']))
+    conn.commit()
+    cur.close(); conn.close()
+    return jsonify({'success': True})
+
+# ── Notifications ──────────────────────────────────────────────────────────────
 
 @app.route('/api/notifications')
 @login_required
@@ -1324,191 +1359,96 @@ def get_notifications():
     user = get_current_user()
     notifications = []
     today = date.today()
-
     conn = get_db()
     cur = conn.cursor()
-
-    # 1. Check-in reminder — if no check-in today
-    cur.execute("SELECT id FROM checkins WHERE user_id=%s AND checkin_date=%s",
-                (user['id'], today))
+    cur.execute("SELECT id FROM checkins WHERE user_id=%s AND checkin_date=%s", (user['id'], today))
     if not cur.fetchone():
         notifications.append({
-            'id': 'checkin-today',
-            'type': 'checkin',
-            'title': 'Daily Check-in',
+            'id': 'checkin-today', 'type': 'checkin', 'title': 'Daily Check-in',
             'message': 'How are you feeling today? Take a moment to check in. 🌿',
-            'link': '/checkin',
-            'link_label': 'Check in now'
+            'link': '/checkin', 'link_label': 'Check in now'
         })
-
-    # 2. Upcoming period reminder — within 3 days
     next_start, _ = predict_next_period(user)
     if next_start:
         days_away = (next_start - today).days
         if 0 <= days_away <= 3:
-            if days_away == 0:
-                msg = 'Your period is predicted to start today. Take care of yourself. 🌹'
-            elif days_away == 1:
-                msg = 'Your period is predicted tomorrow. Be gentle with yourself. 🌹'
-            else:
-                msg = f'Your period is predicted in {days_away} days. A little heads-up. 🌹'
+            msg = ('Your period may start today. Take care. 🌹' if days_away == 0 else
+                   'Your period may start tomorrow. Be gentle. 🌹' if days_away == 1 else
+                   f'Your period may start in {days_away} days. 🌹')
             notifications.append({
-                'id': 'period-soon',
-                'type': 'period',
-                'title': 'Period Approaching',
-                'message': msg,
-                'link': '/calendar',
-                'link_label': 'View Calendar'
+                'id': 'period-soon', 'type': 'period', 'title': 'Period Approaching',
+                'message': msg, 'link': '/calendar', 'link_label': 'View Calendar'
             })
-
-    # 3. Habit nudge — habits exist but none completed today
     cur.execute("SELECT id FROM habits WHERE user_id=%s AND active=TRUE", (user['id'],))
-    habits = cur.fetchall()
-    if habits:
-        cur.execute("""
-            SELECT COUNT(*) as cnt FROM habit_logs
-            WHERE user_id=%s AND log_date=%s AND completed=TRUE
-        """, (user['id'], today))
-        completed = cur.fetchone()['cnt']
-        if completed == 0:
+    if cur.fetchall():
+        cur.execute("""SELECT COUNT(*) as cnt FROM habit_logs
+                       WHERE user_id=%s AND log_date=%s AND completed=TRUE""", (user['id'], today))
+        if cur.fetchone()['cnt'] == 0:
             notifications.append({
-                'id': 'habits-today',
-                'type': 'habit',
-                'title': 'Habits Today',
+                'id': 'habits-today', 'type': 'habit', 'title': 'Habits Today',
                 'message': "You haven't logged any habits yet today. Small steps matter. ✨",
-                'link': '/habits',
-                'link_label': 'Log habits'
+                'link': '/habits', 'link_label': 'Log habits'
             })
-
-    cur.close()
-    conn.close()
-
+    cur.close(); conn.close()
     return jsonify({'notifications': notifications, 'count': len(notifications)})
+
+# ── Cycle planning ─────────────────────────────────────────────────────────────
 
 @app.route('/api/planning')
 @login_required
 def api_planning():
     user_id = session['user_id']
-
     conn = get_db()
     cur = conn.cursor()
-
-    # Fetch periods
-    cur.execute("""
-        SELECT start_date, end_date
-        FROM periods
-        WHERE user_id = %s
-        ORDER BY start_date DESC
-        LIMIT 12
-    """, (user_id,))
+    cur.execute("""SELECT start_date, end_date FROM periods
+                   WHERE user_id=%s ORDER BY start_date DESC LIMIT 12""", (user_id,))
     rows = cur.fetchall()
-
-    # Fetch user cycle settings
-    cur.execute("""
-        SELECT cycle_length, period_length, last_period_date
-        FROM users
-        WHERE id = %s
-    """, (user_id,))
-    user = cur.fetchone()
-
-    cur.close()
-    conn.close()
-
-    # Convert user row to dict
-    user = dict(user) if user else {}
-
-    # Convert periods to list of dicts
-    periods = [
-        {"start_date": row["start_date"], "end_date": row["end_date"]}
-        for row in rows
-    ]
-
-    # IMPORTANT: pass user into the function
+    cur.execute("SELECT cycle_length, period_length, last_period_date FROM users WHERE id=%s", (user_id,))
+    user = dict(cur.fetchone())
+    cur.close(); conn.close()
+    periods = [{"start_date": r["start_date"], "end_date": r["end_date"]} for r in rows]
     prediction = compute_cycle_prediction(periods, user)
-
-    # Convert datetime objects to strings
     def serialize(d):
         return d.isoformat() if hasattr(d, "isoformat") else d
-
     for key in ["next_period", "range_start", "range_end"]:
         prediction[key] = serialize(prediction.get(key))
+    return jsonify(prediction)
 
-    return prediction
-
-def compute_cycle_prediction(periods, user):
-    base = {
-        "status": None,
-        "message": None,
-        "next_period": None,
-        "range_start": None,
-        "range_end": None,
-        "avg_cycle_length": None,
-        "min_cycle_length": None,
-        "max_cycle_length": None,
-        "cycle_count": len(periods),
-        "cycle_length": None
-    }
-
-    # No period data
-    if len(periods) == 0:
-        base["status"] = "no_data"
-        base["message"] = "Log your first period to begin predictions."
+def compute_cycle_prediction(periods, user=None):
+    base = {"status": None, "message": None, "next_period": None, "range_start": None,
+            "range_end": None, "avg_cycle_length": None, "min_cycle_length": None,
+            "max_cycle_length": None, "cycle_count": len(periods), "cycle_length": None}
+    if not periods:
+        base.update({"status": "no_data", "message": "Log your first period to begin predictions."})
         return base
-
-    # User settings
-    user_cycle = user.get("cycle_length")
-    user_period_len = user.get("period_length") or 5
-
-    # If user manually set cycle length → use it
+    user_period_len = (user or {}).get("period_length") or 5
+    user_cycle = (user or {}).get("cycle_length")
     if user_cycle:
         last_start = periods[0]["start_date"]
         next_start = last_start + timedelta(days=user_cycle)
         next_end = next_start + timedelta(days=user_period_len - 1)
-
-        base.update({
-            "status": "user_defined",
-            "cycle_length": user_cycle,
-            "next_period": next_start,
-            "range_start": next_start,
-            "range_end": next_end,
-
-        })
+        base.update({"status": "user_defined", "cycle_length": user_cycle,
+                     "next_period": next_start, "range_start": next_start, "range_end": next_end})
         return base
-
-    # Otherwise calculate from history
-    cycle_lengths = []
-    for i in range(len(periods) - 1):
-        length = (periods[i]["start_date"] - periods[i+1]["start_date"]).days
-        if length > 10:
-            cycle_lengths.append(length)
-
+    cycle_lengths = [
+        (periods[i]["start_date"] - periods[i+1]["start_date"]).days
+        for i in range(len(periods)-1)
+        if (periods[i]["start_date"] - periods[i+1]["start_date"]).days > 10
+    ]
     if not cycle_lengths:
-        base["status"] = "no_valid_cycles"
-        base["message"] = "Not enough valid cycle data to predict."
+        base.update({"status": "no_valid_cycles", "message": "Not enough valid cycle data."})
         return base
-
     avg_len = round(sum(cycle_lengths) / len(cycle_lengths))
-    min_len = min(cycle_lengths)
-    max_len = max(cycle_lengths)
     last_start = periods[0]["start_date"]
-
     next_start = last_start + timedelta(days=avg_len)
     next_end = next_start + timedelta(days=user_period_len - 1)
-
     base.update({
-        "status": "ok",
-        "avg_cycle_length": avg_len,
-        "min_cycle_length": min_len,
-        "max_cycle_length": max_len,
-        "next_period": next_start,
-        "range_start": next_start,
-        "range_end": next_end,
+        "status": "ok", "avg_cycle_length": avg_len,
+        "min_cycle_length": min(cycle_lengths), "max_cycle_length": max(cycle_lengths),
+        "next_period": next_start, "range_start": next_start, "range_end": next_end,
         "cycle_length": avg_len
     })
-
     return base
-
-
 
 # ── Run ───────────────────────────────────────────────────────────────────────
 
