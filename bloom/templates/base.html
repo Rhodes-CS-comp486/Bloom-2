@@ -16,32 +16,50 @@
       <span class="brand-icon">✿</span>
       <span class="brand-text">bloom</span>
     </a>
+
     <ul class="nav-links">
-      <li><a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}">
-        <span class="nav-icon">⌂</span><span>Home</span>
-      </a></li>
-      <li><a href="{{ url_for('garden') }}" class="nav-link {% if request.endpoint == 'garden' %}active{% endif %}">
-        <span class="nav-icon">🌿</span><span>Garden</span>
-      </a></li>
-      <li><a href="{{ url_for('calendar_view') }}" class="nav-link {% if request.endpoint == 'calendar_view' %}active{% endif %}">
-        <span class="nav-icon">◫</span><span>Calendar</span>
-      </a></li>
-      <li><a href="{{ url_for('habits') }}" class="nav-link {% if request.endpoint == 'habits' %}active{% endif %}">
-        <span class="nav-icon">◎</span><span>Habits</span>
-      </a></li>
-      <li><a href="{{ url_for('checkin') }}" class="nav-link {% if request.endpoint == 'checkin' %}active{% endif %}">
-        <span class="nav-icon">♡</span><span>Check-in</span>
-      </a></li>
-      <li><a href="{{ url_for('settings') }}" class="nav-link {% if request.endpoint == 'settings' %}active{% endif %}">
-        <span class="nav-icon">⚙</span><span>Settings</span>
-      </a></li>
-     <li><a href="{{ url_for('reflect') }}" class="nav-link {% if request.endpoint == 'reflect' %}active{% endif %}">
-        <span class="nav-icon">✍</span><span>Reflect</span>
-     <li><a href="{{ url_for('emotional_patterns_page') }}" class="nav-link {% if request.endpoint == 'emotional_patterns_page' %}active{% endif %}">
-        <span class="nav-icon">📊</span><span>Insights</span>
-     </a></li>
+      <li>
+        <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}">
+          <span class="nav-icon">⌂</span><span>Home</span>
+        </a>
+      </li>
+      <li>
+        <a href="{{ url_for('garden') }}" class="nav-link {% if request.endpoint == 'garden' %}active{% endif %}">
+          <span class="nav-icon">🌿</span><span>Garden</span>
+        </a>
+      </li>
+      <li>
+        <a href="{{ url_for('calendar_view') }}" class="nav-link {% if request.endpoint == 'calendar_view' %}active{% endif %}">
+          <span class="nav-icon">◫</span><span>Calendar</span>
+        </a>
+      </li>
+      <li>
+        <a href="{{ url_for('habits') }}" class="nav-link {% if request.endpoint == 'habits' %}active{% endif %}">
+          <span class="nav-icon">◎</span><span>Habits</span>
+        </a>
+      </li>
+      <li>
+        <a href="{{ url_for('checkin') }}" class="nav-link {% if request.endpoint == 'checkin' %}active{% endif %}">
+          <span class="nav-icon">♡</span><span>Check-in</span>
+        </a>
+      </li>
+      <li>
+        <a href="{{ url_for('reflect') }}" class="nav-link {% if request.endpoint == 'reflect' %}active{% endif %}">
+          <span class="nav-icon">✍</span><span>Reflect</span>
+        </a>
+      </li>
+      <li>
+        <a href="{{ url_for('emotional_patterns_page') }}" class="nav-link {% if request.endpoint == 'emotional_patterns_page' %}active{% endif %}">
+          <span class="nav-icon">📊</span><span>Insights</span>
+        </a>
+      </li>
+      <li>
+        <a href="{{ url_for('settings') }}" class="nav-link {% if request.endpoint == 'settings' %}active{% endif %}">
+          <span class="nav-icon">⚙</span><span>Settings</span>
+        </a>
+      </li>
     </ul>
-    <!-- Notification Bell -->
+
     <div class="notif-wrapper" id="notifWrapper">
       <button class="notif-bell" id="notifBell" aria-label="Notifications">
         🔔
@@ -57,6 +75,7 @@
         </div>
       </div>
     </div>
+
     <a href="{{ url_for('logout') }}" class="nav-logout">Leave Garden</a>
   </nav>
   {% endif %}
