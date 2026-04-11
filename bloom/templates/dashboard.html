@@ -98,6 +98,24 @@
       </div>
     </div>
 
+    <!-- Garden Circle Preview -->
+    <div class="dash-card circle-preview-card">
+      <div class="card-header">
+        <h2>🌸 The Garden Circle</h2>
+        <a href="{{ url_for('community') }}" class="card-link">Join the circle →</a>
+      </div>
+      <div class="circle-preview-body">
+        <p class="circle-preview-tagline">A supportive space to share, connect, and grow together.</p>
+        <div class="circle-daily-prompt" id="dashPromptBox">
+          <span class="circle-prompt-label">Today's prompt</span>
+          <span class="circle-prompt-loading">Loading today's prompt… 🌿</span>
+        </div>
+        <a href="{{ url_for('community') }}" class="bloom-btn bloom-btn-primary circle-preview-btn">
+          Go to The Garden Circle 🌸
+        </a>
+      </div>
+    </div>
+
     <!-- Today's Check-in -->
     <div class="dash-card checkin-card">
       <div class="card-header">
@@ -244,6 +262,16 @@
 
 {% block scripts %}
 <script>
+// Load today's community prompt preview on dashboard
+fetch('/api/community-prompt')
+  .then(r => r.json())
+  .then(data => {
+    const box = document.getElementById('dashPromptBox');
+    if (box && data.prompt) {
+      box.innerHTML = `<span class="circle-prompt-label">Today's prompt</span><p class="circle-prompt-text">"${data.prompt}"</p>`;
+    }
+  }).catch(() => {});
+
 async function toggleHabit(habitId, btn) {
   const today = new Date().toISOString().split('T')[0];
   const res = await fetch('/habits/toggle', {

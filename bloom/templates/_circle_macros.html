@@ -1,0 +1,87 @@
+{% macro render_post(post, avatar, depth=0) %}
+<div class="circle-post {% if depth > 0 %}circle-reply{% endif %}" id="post-{{ post.id }}" data-depth="{{ depth }}">
+
+  <div class="circle-post-header">
+    <div class="circle-post-avatar" style="background: {{ post.avatar.bg }}">{{ post.avatar.emoji }}</div>
+    <div class="circle-post-meta">
+      <span class="circle-post-author">{{ post.display_name }}</span>
+      <span class="circle-post-time">{{ post.created_at.strftime('%-I:%M %p · %b %-d') if post.created_at else '' }}</span>
+    </div>
+    {% if not post.is_mine %}
+    <div class="circle-post-actions-right">
+      {% if not post.is_anonymous %}
+      <button class="circle-follow-btn" data-user-id="{{ post.user_id }}" onclick="toggleFollow({{ post.user_id }}, this)">+ Follow</button>
+      {% endif %}
+      <button class="circle-flag-btn {% if post.i_flagged %}flagged{% endif %}"
+              onclick="flagPost({{ post.id }}, this)" title="Flag this post">
+        {% if post.i_flagged %}🚩{% else %}⚑{% endif %}
+      </button>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="circle-post-content">
+    <p>{{ post.content }}</p>
+    {% if post.post_image %}
+    <div class="circle-post-img-wrap">
+      <img class="circle-post-img"
+           src="{{ url_for('static', filename=post.post_image) }}"
+           alt="Attached photo"
+           loading="lazy"
+           onclick="openImgViewer(this.src)" />
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="circle-post-footer">
+    <div class="circle-reactions">
+      <button class="circle-reaction-btn {% if 'heart' in post.my_reactions %}active{% endif %}" onclick="react({{ post.id }}, 'heart', this)">❤️ <span class="rxn-count">{{ post.reactions.heart }}</span></button>
+      <button class="circle-reaction-btn {% if 'support' in post.my_reactions %}active{% endif %}" onclick="react({{ post.id }}, 'support', this)">💜 <span class="rxn-count">{{ post.reactions.support }}</span></button>
+      <button class="circle-reaction-btn {% if 'needed' in post.my_reactions %}active{% endif %}" onclick="react({{ post.id }}, 'needed', this)">🌿 <span class="rxn-count">{{ post.reactions.needed }}</span></button>
+    </div>
+    <button class="circle-reply-toggle" onclick="toggleReplies({{ post.id }}, this)">
+      💬 {{ post.reply_count }} repl{{ 'ies' if post.reply_count != 1 else 'y' }}
+    </button>
+    <button class="circle-reply-btn" onclick="openPostModal({{ post.id }})">Reply</button>
+  </div>
+
+  <!-- Reply Thread -->
+  <div class="circle-replies-thread" id="replies-{{ post.id }}" style="display:none;">
+    <div class="circle-replies-inner" id="replies-inner-{{ post.id }}">
+      <div class="circle-replies-loading">Loading replies… 🌿</div>
+    </div>
+    <!-- Reply Compose -->
+    <div class="circle-reply-compose">
+      <div class="circle-avatar-sm" style="background: {{ avatar.bg }}">{{ avatar.emoji }}</div>
+      <div class="circle-compose-inline">
+        <textarea class="bloom-input circle-reply-input"
+                  placeholder="Write a reply…" rows="2"
+                  id="reply-input-{{ post.id }}" maxlength="500"></textarea>
+
+        <!-- Reply image preview -->
+        <div class="circle-reply-img-preview" id="reply-img-preview-{{ post.id }}" style="display:none;">
+          <img id="reply-img-preview-img-{{ post.id }}" class="circle-reply-preview-img" alt="Preview" />
+          <button class="circle-img-remove" onclick="removeReplyImage({{ post.id }})">✕</button>
+        </div>
+
+        <div class="circle-compose-inline-actions">
+          <label class="circle-slide-label">
+            <input type="checkbox" class="circle-slide-check" id="reply-anon-{{ post.id }}">
+            <span class="circle-slide-track circle-slide-anon"><span class="circle-slide-thumb"></span></span>
+            <span class="circle-slide-text">Anonymous</span>
+          </label>
+          <button type="button" class="circle-attach-btn-sm"
+                  onclick="document.getElementById('reply-img-{{ post.id }}').click()">
+            📷
+          </button>
+          <input type="file" id="reply-img-{{ post.id }}" accept="image/*" style="display:none;"
+                 onchange="previewReplyImage(this, {{ post.id }})">
+          <button class="bloom-btn bloom-btn-primary circle-reply-submit"
+                  onclick="submitPost({{ post.id }})">Post</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endmacro %}
