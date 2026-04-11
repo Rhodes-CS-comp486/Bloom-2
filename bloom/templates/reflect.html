@@ -1,84 +1,178 @@
 {% extends "base.html" %}
 {% block title %}Bloom – Reflect{% endblock %}
 
-{% block content %}
-<div class="checkin-page">
+{% block head %}
+<style>
+.reflect-page { max-width: 720px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
 
-  <div class="checkin-header">
-    <h1>Free Write <em>✿</em></h1>
-    <p>Write freely. No prompts, no rules, just you.</p>
+.reflect-header { margin-bottom: 1.75rem; }
+.reflect-header h1 { font-family:'Cormorant Garamond',serif; font-size:2.4rem; font-weight:300; color:#1a1208; margin:0 0 0.25rem; letter-spacing:-0.02em; }
+.reflect-header h1 em { color:#c97060; font-style:italic; }
+.reflect-header p { color:#9b8878; font-size:0.88rem; margin:0; font-style:italic; }
+
+.prompt-of-day {
+  background: linear-gradient(135deg, #fdf8f2, #faf0e8);
+  border: 1.5px solid #e8d8c0;
+  border-radius: 18px;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.5rem;
+  position: relative;
+}
+.pod-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.1em; color: #c97060; font-weight: 600; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem; }
+.pod-text { font-family:'Cormorant Garamond',serif; font-size:1.35rem; color:#2a2018; line-height:1.5; margin: 0 0 0.85rem; }
+.pod-actions { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
+.pod-use-btn { padding: 0.42rem 1rem; background: #c97060; color: white; border: none; border-radius: 20px; font-size: 0.78rem; cursor: pointer; font-family:'DM Sans',sans-serif; font-weight: 500; transition: all 0.15s; }
+.pod-use-btn:hover { background: #a05040; transform: translateY(-1px); }
+.pod-fav-btn { width: 34px; height: 34px; border-radius: 50%; border: 1.5px solid #e8d8c0; background: white; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1rem; transition: all 0.18s; }
+.pod-fav-btn:hover { border-color: #c97060; transform: scale(1.1); }
+.pod-fav-btn.faved { background: #fdf0ee; border-color: #c97060; }
+.pod-shuffle { padding: 0.42rem 0.85rem; background: white; color: #6b5a45; border: 1.5px solid #e8d8c0; border-radius: 20px; font-size: 0.78rem; cursor: pointer; font-family:'DM Sans',sans-serif; transition: all 0.15s; margin-left: auto; }
+.pod-shuffle:hover { border-color: #c97060; color: #c97060; }
+
+.prompts-section { margin-bottom: 1.75rem; }
+.prompts-section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.85rem; }
+.prompts-section-head h2 { font-family:'Cormorant Garamond',serif; font-size:1.4rem; font-weight:400; color:#2a2018; margin:0; }
+.prompts-toggle { font-size: 0.78rem; color: #c97060; cursor: pointer; background: none; border: none; font-family:'DM Sans',sans-serif; padding: 0; }
+.prompts-toggle:hover { text-decoration: underline; }
+.prompts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+@media (max-width: 560px) { .prompts-grid { grid-template-columns: 1fr; } }
+.prompt-card {
+  background: white; border: 1.5px solid #f0e8db; border-radius: 14px;
+  padding: 0.85rem 1rem; display: flex; gap: 0.75rem; align-items: flex-start;
+  transition: all 0.18s; cursor: pointer;
+}
+.prompt-card:hover { border-color: #e8c8b8; box-shadow: 0 4px 14px rgba(201,112,96,0.1); transform: translateY(-1px); }
+.prompt-card.faved { border-color: #c97060; background: #fdf8f5; }
+.pc-text { font-size: 0.83rem; color: #4a3828; line-height: 1.5; flex: 1; }
+.pc-fav { background: none; border: none; cursor: pointer; font-size: 1rem; flex-shrink: 0; padding: 0; transition: transform 0.15s; line-height: 1; margin-top: 1px; }
+.pc-fav:hover { transform: scale(1.2); }
+.pc-use { font-size: 0.72rem; color: #c97060; cursor: pointer; background: none; border: none; font-family:'DM Sans',sans-serif; padding: 0; margin-top: 4px; display: block; }
+.pc-use:hover { text-decoration: underline; }
+
+.fav-link-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  background: #fdf0ee; border: 1.5px solid #f0c8b8; border-radius: 12px;
+  padding: 0.65rem 1rem; margin-bottom: 1.5rem; text-decoration: none;
+  transition: all 0.15s;
+}
+.fav-link-bar:hover { background: #fde8e0; border-color: #c97060; }
+.fav-link-bar span { font-size: 0.83rem; color: #c97060; font-weight: 500; }
+.fav-link-bar small { font-size: 0.75rem; color: #c8907a; }
+
+.reflect-form-section { margin-bottom: 2rem; }
+.reflect-form-section h2 { font-family:'Cormorant Garamond',serif; font-size:1.4rem; font-weight:400; color:#2a2018; margin:0 0 0.85rem; }
+.reflect-prompt-active {
+  background: #fdf8f2; border-left: 3px solid #c97060;
+  padding: 0.6rem 0.85rem; border-radius: 0 8px 8px 0;
+  font-size: 0.83rem; color: #6b5a45; font-style: italic;
+  margin-bottom: 0.75rem; display: none;
+}
+.reflect-prompt-active.show { display: block; }
+
+.past-section h2 { font-family:'Cormorant Garamond',serif; font-size:1.4rem; font-weight:400; color:#2a2018; margin:0 0 1rem; }
+.reflection-item { padding: 1rem 0; border-bottom: 1px solid #f5ede0; }
+.reflection-item:last-child { border-bottom: none; }
+.ri-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+.ri-date { font-size: 0.78rem; color: #9b8878; }
+.ri-actions { display: flex; gap: 0.75rem; }
+.ri-btn { background: none; border: none; cursor: pointer; font-family:'DM Sans',sans-serif; font-size: 0.78rem; color: #9b8878; padding: 0; }
+.ri-btn:hover { color: #6b5a45; }
+.ri-btn.del:hover { color: #c97060; }
+.ri-text { font-size: 0.88rem; color: #6b5a45; white-space: pre-wrap; line-height: 1.6; margin: 0; }
+.ri-edit-form { display: none; margin-top: 0.75rem; }
+.ri-edit-form textarea { width: 100%; margin-bottom: 0.5rem; }
+.ri-edit-btns { display: flex; gap: 0.5rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="reflect-page">
+
+  <div class="reflect-header">
+    <h1>Reflect <em>✿</em></h1>
+    <p>Write freely — or let a prompt guide you.</p>
   </div>
 
-  <!-- New Entry Form -->
-  <form method="POST" action="{{ url_for('reflect') }}" class="checkin-form">
-    <div class="ci-section">
-      <h2>Today's Reflection <span class="ci-optional">{{ today.strftime('%B %-d') }}</span></h2>
-      <textarea
-        name="content"
-        class="bloom-input ci-notes"
-        rows="7"
-        placeholder="What's on your mind? Write as much or as little as you'd like..."></textarea>
+  <a href="{{ url_for('favorite_prompts_page') }}" class="fav-link-bar">
+    <span>♡ My Favorite Prompts</span>
+    <small>View & reuse saved prompts →</small>
+  </a>
+
+  <div class="prompt-of-day">
+    <div class="pod-label">✦ Prompt of the day</div>
+    <p class="pod-text" id="podText">{{ daily_prompt }}</p>
+    <div class="pod-actions">
+      <button class="pod-use-btn" type="button" onclick="usePrompt(document.getElementById('podText').textContent)">Use this prompt</button>
+      <button class="pod-fav-btn" id="podFavBtn" type="button" onclick="toggleFav(document.getElementById('podText').textContent, this)" title="Save to favorites">♡</button>
+      <button class="pod-shuffle" type="button" onclick="shufflePrompt()">↻ New prompt</button>
     </div>
+  </div>
 
-    <div class="ci-submit">
-      <button type="submit" class="bloom-btn bloom-btn-primary bloom-btn-lg">
-        Save Reflection 🌿
-      </button>
-      <a href="{{ url_for('dashboard') }}" class="bloom-btn bloom-btn-ghost">Cancel</a>
+  <div class="prompts-section">
+    <div class="prompts-section-head">
+      <h2>Browse Prompts</h2>
+      <button class="prompts-toggle" type="button" onclick="togglePrompts()">Show all</button>
     </div>
-  </form>
-
-  <!-- Past Reflections -->
-  {% if reflections %}
-  <div class="recent-checkins">
-    <h2>Past Reflections</h2>
-    <div class="recent-list">
-      {% for r in reflections %}
-      <div class="recent-item" style="flex-direction: column; align-items: flex-start; gap: 0.5rem; padding: 1rem 0;">
-
-        <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
-          <span class="rc-date">{{ r.created_at.strftime('%B %-d, %Y') }}</span>
-          <div style="display: flex; gap: 0.75rem;">
-            <button class="card-link"
-                    onclick="toggleEdit({{ r.id }})"
-                    style="background: none; border: none; cursor: pointer; font-family: inherit;">
-              Edit
-            </button>
-            <form method="POST" action="{{ url_for('delete_reflection', reflection_id=r.id) }}"
-                  style="display:inline"
-                  onsubmit="return confirm('Delete this reflection?')">
-              <button type="submit"
-                      class="card-link"
-                      style="background: none; border: none; cursor: pointer; font-family: inherit; color: #c97060;">
-                Delete
-              </button>
-            </form>
-          </div>
+    <div class="prompts-grid" id="promptsGrid" style="display:none">
+      {% for prompt in prompts %}
+      <div class="prompt-card" id="pc-{{ loop.index }}" onclick='usePrompt({{ prompt|tojson }})'>
+        <div style="flex:1">
+          <div class="pc-text">{{ prompt }}</div>
+          <button class="pc-use" type="button" onclick='event.stopPropagation(); usePrompt({{ prompt|tojson }})'>Use prompt →</button>
         </div>
-
-        <!-- Read view -->
-        <p id="view-{{ r.id }}"
-           style="margin: 0; white-space: pre-wrap; color: #888;">{{ r.content }}</p>
-
-        <!-- Edit view (hidden by default) -->
-        <form id="edit-{{ r.id }}" method="POST"
-              action="{{ url_for('edit_reflection', reflection_id=r.id) }}"
-              style="display: none; width: 100%;">
-          <textarea name="content" class="bloom-input ci-notes" rows="5"
-                    style="width: 100%; margin-bottom: 0.5rem;">{{ r.content }}</textarea>
-          <div style="display: flex; gap: 0.75rem;">
-            <button type="submit" class="bloom-btn bloom-btn-primary">Save</button>
-            <button type="button" class="bloom-btn bloom-btn-ghost"
-                    onclick="toggleEdit({{ r.id }})">Cancel</button>
-          </div>
-        </form>
-
+        <button class="pc-fav" type="button"
+                data-prompt="{{ prompt }}"
+                onclick='event.stopPropagation(); toggleFav({{ prompt|tojson }}, this)'
+                title="Save to favorites">♡</button>
       </div>
       {% endfor %}
     </div>
   </div>
+
+  <div class="reflect-form-section">
+    <h2>Today's Reflection <span style="font-size:0.85rem;color:#9b8878;font-family:'DM Sans',sans-serif">{{ today.strftime('%B %-d') }}</span></h2>
+    <div class="reflect-prompt-active" id="activePromptBar"></div>
+    <form method="POST" action="{{ url_for('reflect') }}">
+      <input type="hidden" name="prompt_text" id="promptTextInput">
+      <textarea name="content" class="bloom-input ci-notes" id="reflectTextarea" rows="7"
+                placeholder="What's on your mind? Write as much or as little as you'd like..."></textarea>
+      <div class="ci-submit" style="margin-top:1rem">
+        <button type="submit" class="bloom-btn bloom-btn-primary bloom-btn-lg">Save Reflection 🌿</button>
+        <a href="{{ url_for('dashboard') }}" class="bloom-btn bloom-btn-ghost">Cancel</a>
+      </div>
+    </form>
+  </div>
+
+  {% if reflections %}
+  <div class="past-section">
+    <h2>Past Reflections</h2>
+    {% for r in reflections %}
+    <div class="reflection-item">
+      <div class="ri-header">
+        <span class="ri-date">{{ r.created_at.strftime('%B %-d, %Y') }}</span>
+        <div class="ri-actions">
+          <button class="ri-btn" type="button" onclick="toggleEdit({{ r.id }})">Edit</button>
+          <form method="POST" action="{{ url_for('delete_reflection', reflection_id=r.id) }}"
+                style="display:inline" onsubmit="return confirm('Delete this reflection?')">
+            <button type="submit" class="ri-btn del">Delete</button>
+          </form>
+        </div>
+      </div>
+      <p class="ri-text" id="view-{{ r.id }}">{{ r.content }}</p>
+      <div class="ri-edit-form" id="edit-{{ r.id }}">
+        <form method="POST" action="{{ url_for('edit_reflection', reflection_id=r.id) }}">
+          <textarea name="content" class="bloom-input ci-notes" rows="5">{{ r.content }}</textarea>
+          <div class="ri-edit-btns" style="margin-top:0.5rem">
+            <button type="submit" class="bloom-btn bloom-btn-primary">Save</button>
+            <button type="button" class="bloom-btn bloom-btn-ghost" onclick="toggleEdit({{ r.id }})">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
   {% else %}
-  <div style="text-align: center; padding: 2rem 0; color: #aaa;">
+  <div style="text-align:center;padding:2rem 0;color:#aaa">
     <p>No reflections yet. Your first entry will appear here. 🌱</p>
   </div>
   {% endif %}
@@ -88,12 +182,106 @@
 
 {% block scripts %}
 <script>
+const ALL_PROMPTS = {{ prompts | tojson }};
+let favoriteSet = new Set();
+
+async function loadFavorites() {
+  try {
+    const r = await fetch('/api/prompts/favorites');
+    const data = await r.json();
+    favoriteSet = new Set(data.favorites);
+    updateAllFavButtons();
+  } catch (e) {}
+}
+
+function updateAllFavButtons() {
+  document.querySelectorAll('.pc-fav').forEach(btn => {
+    const prompt = btn.dataset.prompt;
+    const isFav = favoriteSet.has(prompt);
+    btn.textContent = isFav ? '♥' : '♡';
+    btn.style.color = isFav ? '#c97060' : '#c8a898';
+    btn.closest('.prompt-card').classList.toggle('faved', isFav);
+  });
+
+  const podText = document.getElementById('podText').textContent;
+  const podBtn = document.getElementById('podFavBtn');
+  if (podBtn) {
+    const isFav = favoriteSet.has(podText);
+    podBtn.textContent = isFav ? '♥' : '♡';
+    podBtn.classList.toggle('faved', isFav);
+  }
+}
+
+async function toggleFav(prompt, btn) {
+  try {
+    const r = await fetch('/prompts/favorite', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ prompt })
+    });
+    const data = await r.json();
+
+    if (data.favorited) {
+      favoriteSet.add(prompt);
+      btn.textContent = '♥';
+      btn.style.color = '#c97060';
+      btn.style.transform = 'scale(1.35)';
+      setTimeout(() => btn.style.transform = '', 250);
+    } else {
+      favoriteSet.delete(prompt);
+      btn.textContent = '♡';
+      btn.style.color = '#c8a898';
+    }
+
+    const card = btn.closest('.prompt-card');
+    if (card) card.classList.toggle('faved', data.favorited);
+
+    const podBtn = document.getElementById('podFavBtn');
+    if (podBtn && document.getElementById('podText').textContent === prompt) {
+      podBtn.textContent = data.favorited ? '♥' : '♡';
+      podBtn.classList.toggle('faved', data.favorited);
+    }
+  } catch (e) {}
+}
+
+function usePrompt(prompt) {
+  const ta = document.getElementById('reflectTextarea');
+  const bar = document.getElementById('activePromptBar');
+  const hidden = document.getElementById('promptTextInput');
+
+  ta.placeholder = prompt;
+  hidden.value = prompt;
+  bar.textContent = '"' + prompt + '"';
+  bar.classList.add('show');
+  ta.focus();
+  ta.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+let promptIdx = Math.floor(Math.random() * ALL_PROMPTS.length);
+
+function shufflePrompt() {
+  promptIdx = (promptIdx + 1) % ALL_PROMPTS.length;
+  const newPrompt = ALL_PROMPTS[promptIdx];
+  document.getElementById('podText').textContent = newPrompt;
+  updateAllFavButtons();
+}
+
+let promptsVisible = false;
+
+function togglePrompts() {
+  promptsVisible = !promptsVisible;
+  document.getElementById('promptsGrid').style.display = promptsVisible ? 'grid' : 'none';
+  document.querySelector('.prompts-toggle').textContent = promptsVisible ? 'Hide' : 'Show all';
+}
+
 function toggleEdit(id) {
   const view = document.getElementById('view-' + id);
   const form = document.getElementById('edit-' + id);
-  const hidden = form.style.display === 'none';
+  const hidden = form.style.display === 'none' || form.style.display === '';
   view.style.display = hidden ? 'none' : '';
   form.style.display = hidden ? 'block' : 'none';
 }
+
+loadFavorites();
 </script>
 {% endblock %}

@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}Bloom – Favorite Prompts{% endblock %}
+
+{% block head %}
+<style>
+.fav-page { max-width: 720px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
+.fav-header { margin-bottom: 1.75rem; }
+.fav-header h1 { font-family:'Cormorant Garamond',serif; font-size:2.4rem; font-weight:300; color:#1a1208; margin:0 0 0.25rem; letter-spacing:-0.02em; }
+.fav-header h1 em { color:#c97060; font-style:italic; }
+.fav-header p { color:#9b8878; font-size:0.88rem; margin:0; font-style:italic; }
+
+.fav-back { display:inline-flex; align-items:center; gap:0.4rem; font-size:0.82rem; color:#9b8878; text-decoration:none; margin-bottom:1.5rem; transition:color 0.15s; }
+.fav-back:hover { color:#c97060; }
+
+.fav-list { display:flex; flex-direction:column; gap:0.75rem; }
+
+.fav-card {
+  background: white; border: 1.5px solid #f0e8db; border-radius: 16px;
+  padding: 1.1rem 1.25rem; display: flex; gap: 1rem; align-items: flex-start;
+  transition: all 0.18s;
+}
+.fav-card:hover { border-color: #e8c8b8; box-shadow: 0 4px 16px rgba(201,112,96,0.1); }
+.fav-card-left { flex: 1; }
+.fav-card-prompt { font-family:'Cormorant Garamond',serif; font-size:1.15rem; color:#2a2018; line-height:1.5; margin:0 0 0.5rem; }
+.fav-card-date { font-size:0.72rem; color:#b8a898; }
+.fav-card-actions { display:flex; gap:0.5rem; margin-top:0.65rem; flex-wrap:wrap; }
+.fav-use-btn { padding:0.36rem 0.85rem; background:#c97060; color:white; border:none; border-radius:20px; font-size:0.75rem; cursor:pointer; font-family:'DM Sans',sans-serif; font-weight:500; text-decoration:none; transition:all 0.15s; display:inline-block; }
+.fav-use-btn:hover { background:#a05040; }
+.fav-remove-btn { padding:0.36rem 0.85rem; background:white; color:#c8907a; border:1.5px solid #f0d8cc; border-radius:20px; font-size:0.75rem; cursor:pointer; font-family:'DM Sans',sans-serif; transition:all 0.15s; }
+.fav-remove-btn:hover { border-color:#c97060; color:#c97060; }
+
+.fav-empty { text-align:center; padding:3rem 1rem; color:#b8a898; }
+.fav-empty-icon { font-size:2.5rem; margin-bottom:1rem; }
+.fav-empty p { font-size:0.9rem; margin-bottom:0.4rem; color:#9b8878; }
+.fav-empty a { color:#c97060; font-size:0.85rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="fav-page">
+
+  <a href="{{ url_for('reflect') }}" class="fav-back">← Back to Reflect</a>
+
+  <div class="fav-header">
+    <h1>Favorite Prompts <em>♡</em></h1>
+    <p>Prompts you've saved to revisit and reflect on again.</p>
+  </div>
+
+  {% if favorites %}
+  <div class="fav-list" id="favList">
+    {% for fav in favorites %}
+    <div class="fav-card" id="fav-{{ loop.index }}">
+      <div class="fav-card-left">
+        <p class="fav-card-prompt">"{{ fav.prompt_text }}"</p>
+        <div class="fav-card-date">Saved {{ fav.created_at.strftime('%B %-d, %Y') }}</div>
+        <div class="fav-card-actions">
+          <a href="{{ url_for('reflect') }}?prompt={{ fav.prompt_text | urlencode }}"
+             class="fav-use-btn">Use this prompt →</a>
+          <button class="fav-remove-btn"
+                  onclick="removeFav('{{ fav.prompt_text|replace("'", "\\'")|replace('"', '\\"') }}', this)">
+            ♡ Remove
+          </button>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="fav-empty">
+    <div class="fav-empty-icon">♡</div>
+    <p>No favorite prompts yet.</p>
+    <p style="font-size:0.82rem">Heart a prompt on the reflect page to save it here.</p>
+    <a href="{{ url_for('reflect') }}">Go to Reflect →</a>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function removeFav(prompt, btn) {
+  const card = btn.closest('.fav-card');
+  const r = await fetch('/prompts/favorite', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({prompt})
+  });
+  const data = await r.json();
+  if (!data.favorited) {
+    card.style.opacity = '0';
+    card.style.transform = 'translateX(20px)';
+    card.style.transition = 'all 0.3s ease';
+    setTimeout(() => {
+      card.remove();
+      const list = document.getElementById('favList');
+      if (list && list.children.length === 0) {
+        list.innerHTML = '<div class="fav-empty"><div class="fav-empty-icon">♡</div><p>No favorite prompts yet.</p><a href="/reflect">Go to Reflect</a></div>';
+      }
+    }, 300);
+  }
+}
+</script>
+{% endblock %}
