@@ -23,6 +23,18 @@
     </div>
   </div>
 
+  <!-- Search Users -->
+  <div class="circle-search-wrap">
+    <div class="circle-search-box">
+      <span class="circle-search-icon">🔍</span>
+      <input type="text" class="circle-search-input" id="userSearchInput"
+             placeholder="Search members by name or username…"
+             autocomplete="off"
+             oninput="searchUsers(this.value)">
+    </div>
+    <div class="circle-search-results" id="userSearchResults" style="display:none;"></div>
+  </div>
+
   <!-- Daily Prompt -->
   <div class="circle-prompt-card">
     <div class="circle-prompt-header">
@@ -429,5 +441,57 @@ function openImgViewer(src) {
   ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
   document.body.appendChild(ov);
 }
+
+// ── USER SEARCH ─────────────────────────────────────────────────────
+let searchTimer = null;
+function searchUsers(q) {
+  clearTimeout(searchTimer);
+  const results = document.getElementById('userSearchResults');
+  if (q.trim().length < 2) { results.style.display = 'none'; return; }
+  searchTimer = setTimeout(async () => {
+    const res = await fetch(`/community/search?q=${encodeURIComponent(q)}`);
+    const data = await res.json();
+    if (!data.users.length) {
+      results.innerHTML = `<div class="circle-search-empty">No members found for "<strong>${q}</strong>" 🌱</div>`;
+    } else {
+      results.innerHTML = data.users.map(u => `
+        <div class="circle-search-result">
+          <a class="circle-search-result-link" href="/community/profile/${u.id}">
+            <div class="circle-search-avatar" style="background:${u.avatar_bg}">${u.avatar_emoji}</div>
+            <div class="circle-search-info">
+              <span class="circle-search-name">${u.display_name}</span>
+              <span class="circle-search-handle">@${u.username} · ${u.followers} follower${u.followers !== 1 ? 's' : ''}</span>
+              ${u.bio ? `<span class="circle-search-bio">${u.bio}</span>` : ''}
+            </div>
+          </a>
+          <button class="circle-follow-btn ${u.i_follow ? 'following' : ''}"
+                  id="srch-follow-${u.id}"
+                  onclick="searchFollow(${u.id}, this)">
+            ${u.i_follow ? '✓ Following' : '+ Follow'}
+          </button>
+        </div>`).join('');
+    }
+    results.style.display = 'block';
+  }, 320);
+}
+
+async function searchFollow(targetId, btn) {
+  const res = await fetch('/community/follow', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_id: targetId })
+  });
+  const data = await res.json();
+  if (data.success) {
+    btn.textContent = data.following ? '✓ Following' : '+ Follow';
+    btn.classList.toggle('following', data.following);
+  }
+}
+
+// Close search results when clicking outside
+document.addEventListener('click', e => {
+  if (!e.target.closest('.circle-search-wrap')) {
+    document.getElementById('userSearchResults').style.display = 'none';
+  }
+});
 </script>
 {% endblock %}

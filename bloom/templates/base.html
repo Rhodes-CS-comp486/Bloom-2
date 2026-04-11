@@ -54,6 +54,11 @@
         </a>
       </li>
       <li>
+        <a href="{{ url_for('community') }}" class="nav-link {% if request.endpoint in ['community','community_profile'] %}active{% endif %}">
+          <span class="nav-icon">🌸</span><span>The Circle</span>
+        </a>
+      </li>
+      <li>
         <a href="{{ url_for('settings') }}" class="nav-link {% if request.endpoint == 'settings' %}active{% endif %}">
           <span class="nav-icon">⚙</span><span>Settings</span>
         </a>

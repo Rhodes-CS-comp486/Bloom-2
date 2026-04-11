@@ -1852,3 +1852,227 @@ em { font-style: italic; color: var(--rose); }
   .period-banner { flex-wrap: wrap; }
   .page-container { padding: 1rem 1rem 3rem; }
 }
+
+/* ── Garden Circle: Search ───────────────────────────────────────────── */
+.circle-search-wrap {
+  position: relative;
+  margin-bottom: 1.25rem;
+}
+.circle-search-box {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: #fff;
+  border: 1.5px solid var(--earth-light);
+  border-radius: var(--radius);
+  padding: 0.55rem 0.9rem;
+  transition: border-color 0.2s;
+}
+.circle-search-box:focus-within {
+  border-color: var(--sage);
+  box-shadow: 0 0 0 3px rgba(130, 160, 110, 0.12);
+}
+.circle-search-icon { font-size: 1rem; opacity: 0.5; flex-shrink: 0; }
+.circle-search-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 0.9rem;
+  font-family: var(--sans);
+  color: var(--ink);
+  background: transparent;
+}
+.circle-search-input::placeholder { color: var(--ink-soft); }
+.circle-search-results {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0; right: 0;
+  background: #fff;
+  border: 1.5px solid var(--earth-light);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.09);
+  z-index: 200;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.circle-search-result {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 0.9rem;
+  border-bottom: 1px solid #f3ede8;
+  transition: background 0.15s;
+  cursor: pointer;
+}
+.circle-search-result:last-child { border-bottom: none; }
+.circle-search-result:hover { background: #fdf8f4; }
+.circle-search-avatar {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+.circle-search-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+.circle-search-name {
+  font-weight: 500;
+  font-size: 0.875rem;
+  color: var(--ink);
+}
+.circle-search-handle {
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+}
+.circle-search-follow-btn {
+  font-size: 0.78rem;
+  padding: 0.25rem 0.7rem;
+  border-radius: 20px;
+  border: 1.5px solid var(--sage);
+  background: transparent;
+  color: var(--sage-deep, #5a7a4a);
+  cursor: pointer;
+  font-family: var(--sans);
+  font-weight: 500;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.circle-search-follow-btn:hover { background: var(--sage); color: #fff; }
+.circle-search-follow-btn.following {
+  border-color: var(--earth-light);
+  color: var(--ink-soft);
+}
+.circle-search-follow-btn.following:hover { background: #fdf0ee; border-color: var(--rose-light); color: var(--rose); }
+.circle-search-empty {
+  padding: 1rem;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  font-style: italic;
+}
+
+/* ── Garden Circle: Profile Page ─────────────────────────────────────── */
+.circle-profile-card {
+  background: #fff;
+  border: 1.5px solid var(--earth-light);
+  border-radius: var(--radius-lg, 16px);
+  padding: 2rem;
+  display: flex;
+  gap: 1.5rem;
+  align-items: flex-start;
+  margin-bottom: 2rem;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+}
+.circle-profile-avatar-lg {
+  width: 80px; height: 80px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 2.2rem;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+.circle-profile-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.circle-profile-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.circle-profile-name {
+  font-family: var(--serif);
+  font-size: 1.6rem;
+  font-weight: 400;
+  color: var(--ink);
+  margin: 0;
+}
+.circle-profile-badge {
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.2rem 0.6rem;
+  border-radius: 20px;
+}
+.circle-badge-public { background: #edf6e8; color: #4a7a35; border: 1px solid #c5e0b8; }
+.circle-badge-private { background: #f3f3f3; color: #666; border: 1px solid #ddd; }
+.circle-profile-handle {
+  font-size: 0.875rem;
+  color: var(--ink-soft);
+}
+.circle-profile-bio {
+  font-size: 0.9rem;
+  color: var(--ink);
+  line-height: 1.5;
+  margin: 0.15rem 0;
+}
+.circle-profile-stats {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.3rem;
+}
+.circle-profile-stat {
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+.circle-profile-stat strong { color: var(--ink); font-weight: 600; }
+.circle-profile-stat-sep { color: var(--earth-light); }
+
+/* Profile actions column */
+.circle-profile-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  flex-shrink: 0;
+  min-width: 200px;
+}
+.circle-own-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+.circle-bio-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.circle-bio-textarea {
+  width: 100%;
+  min-height: 72px;
+  resize: vertical;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  padding: 0.5rem 0.65rem;
+}
+
+/* Profile posts header */
+.circle-profile-posts-header {
+  margin-bottom: 1rem;
+}
+.circle-profile-posts-header h2 {
+  font-family: var(--serif);
+  font-size: 1.2rem;
+  font-weight: 400;
+  color: var(--ink);
+}
+
+/* Responsive: profile card stacks on mobile */
+@media (max-width: 640px) {
+  .circle-profile-card {
+    flex-direction: column;
+    padding: 1.25rem;
+  }
+  .circle-profile-actions {
+    width: 100%;
+    min-width: unset;
+  }
+  .circle-profile-name { font-size: 1.3rem; }
+}
