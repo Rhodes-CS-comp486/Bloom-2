@@ -103,6 +103,74 @@ def init_db():
             last_watered TIMESTAMP DEFAULT NOW()
         );
     """)
+    # ── Garden Circle tables ───────────────────────────────────────────
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS community_prompts (
+            id SERIAL PRIMARY KEY,
+            prompt_text TEXT NOT NULL,
+            prompt_date DATE NOT NULL UNIQUE,
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS community_posts (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+            prompt_id INTEGER REFERENCES community_prompts(id) ON DELETE CASCADE,
+            parent_id INTEGER REFERENCES community_posts(id) ON DELETE CASCADE,
+            content TEXT NOT NULL,
+            is_anonymous BOOLEAN DEFAULT FALSE,
+            post_image VARCHAR(300),
+            is_hidden BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS post_reactions (
+            id SERIAL PRIMARY KEY,
+            post_id INTEGER REFERENCES community_posts(id) ON DELETE CASCADE,
+            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+            reaction_type VARCHAR(20) NOT NULL
+                CHECK (reaction_type IN ('heart','support','needed')),
+            created_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(post_id, user_id, reaction_type)
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS post_flags (
+            id SERIAL PRIMARY KEY,
+            post_id INTEGER REFERENCES community_posts(id) ON DELETE CASCADE,
+            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+            reason TEXT,
+            reviewed BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(post_id, user_id)
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS user_follows (
+            id SERIAL PRIMARY KEY,
+            follower_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+            following_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+            created_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(follower_id, following_id)
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS moderation_warnings (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+            post_id INTEGER,
+            reason TEXT,
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+
     conn.commit()
     cur.close()
     conn.close()
@@ -112,12 +180,19 @@ def migrate_db():
     """Safely add new columns to existing tables."""
     conn = get_db()
     cur = conn.cursor()
-    try:
-        cur.execute("ALTER TABLE habits ADD COLUMN IF NOT EXISTS paused BOOLEAN DEFAULT FALSE")
-        conn.commit()
-    except Exception as e:
-        print(f"Migration note: {e}")
-        conn.rollback()
+    migrations = [
+        "ALTER TABLE habits ADD COLUMN IF NOT EXISTS paused BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_style VARCHAR(50) DEFAULT 'seedling'",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT TRUE",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT",
+    ]
+    for sql in migrations:
+        try:
+            cur.execute(sql)
+            conn.commit()
+        except Exception as e:
+            print(f"Migration note: {e}")
+            conn.rollback()
     cur.close()
     conn.close()
 
@@ -1449,6 +1524,487 @@ def compute_cycle_prediction(periods, user=None):
         "cycle_length": avg_len
     })
     return base
+
+# ── GARDEN CIRCLE ─────────────────────────────────────────────────────────────
+
+AVATAR_STYLES = {
+    'seedling':       {'emoji': '🌱', 'bg': '#e8f4ec', 'label': 'Seedling'},
+    'daisy':          {'emoji': '🌼', 'bg': '#fff8e0', 'label': 'Daisy'},
+    'rose':           {'emoji': '🌹', 'bg': '#fdf0ee', 'label': 'Rose'},
+    'sunflower':      {'emoji': '🌻', 'bg': '#fff8e0', 'label': 'Sunflower'},
+    'lavender':       {'emoji': '💜', 'bg': '#f5f3fd', 'label': 'Lavender'},
+    'cherry_blossom': {'emoji': '🌸', 'bg': '#fdf0f5', 'label': 'Cherry Blossom'},
+    'lotus':          {'emoji': '🪷', 'bg': '#fdf0f8', 'label': 'Lotus'},
+}
+
+def get_avatar_style(user):
+    style = (user.get('avatar_style') or 'seedling')
+    return AVATAR_STYLES.get(style, AVATAR_STYLES['seedling'])
+
+def get_or_create_daily_prompt():
+    today = date.today()
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM community_prompts WHERE prompt_date = %s", (today,))
+    prompt = cur.fetchone()
+    if prompt:
+        cur.close(); conn.close()
+        return prompt
+
+    import random
+    topics = [
+        "cycle wellness and body awareness",
+        "daily habits and self-care rituals",
+        "emotions, moods, and mental wellness",
+        "nature, seasons, and everyday beauty",
+        "celebrating small wins and progress",
+        "rest, sleep, and slowing down",
+        "nourishment, food, and body kindness",
+        "creativity, joy, and things that light you up",
+        "relationships, community, and connection",
+        "goals, growth, and gentle accountability",
+    ]
+    topic = random.choice(topics)
+    prompt_instruction = (
+        f"Write a single warm, open-ended community prompt for a wellness app called Bloom. "
+        f"The prompt should invite users to share something personal and positive about {topic}. "
+        f"Keep it one sentence, conversational, supportive, and inclusive. "
+        f"Do not start with 'Share' or 'Tell us'. Make it feel like a gentle invitation from a friend."
+    )
+    try:
+        client = anthropic.Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
+        response = client.messages.create(
+            model="claude-opus-4-5",
+            max_tokens=100,
+            messages=[{"role": "user", "content": prompt_instruction}]
+        )
+        prompt_text = response.content[0].text.strip().strip('"')
+    except Exception:
+        prompt_text = "What's one small thing you did for yourself today that felt good? 🌿"
+
+    cur.execute(
+        "INSERT INTO community_prompts (prompt_text, prompt_date) VALUES (%s, %s) RETURNING *",
+        (prompt_text, today)
+    )
+    prompt = cur.fetchone()
+    conn.commit()
+    cur.close(); conn.close()
+    return prompt
+
+def moderate_post_content(content):
+    check_prompt = (
+        f"You are a content moderator for a supportive women's wellness community called Bloom. "
+        f"Review this post and determine if it violates community guidelines. "
+        f"Violations include: hate speech, harassment, bullying, explicit sexual content, "
+        f"self-harm promotion, threats, spam, or deeply offensive language. "
+        f"Supportive discussions about health, emotions, relationships, and daily life are welcome. "
+        f"Reply with ONLY 'SAFE' or 'UNSAFE: <brief reason>'.\n\nPost: {content}"
+    )
+    try:
+        client = anthropic.Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
+        response = client.messages.create(
+            model="claude-opus-4-5",
+            max_tokens=60,
+            messages=[{"role": "user", "content": check_prompt}]
+        )
+        result = response.content[0].text.strip()
+        if result.startswith('SAFE'):
+            return True, None
+        return False, result.replace('UNSAFE:', '').strip()
+    except Exception:
+        return True, None
+
+def enrich_posts(posts, current_user_id):
+    if not posts:
+        return []
+    conn = get_db()
+    cur = conn.cursor()
+    enriched = []
+    for post in posts:
+        post = dict(post)
+        post_id = post['id']
+        cur.execute("""
+            SELECT reaction_type, COUNT(*) as cnt FROM post_reactions
+            WHERE post_id=%s GROUP BY reaction_type
+        """, (post_id,))
+        rxns = {r['reaction_type']: r['cnt'] for r in cur.fetchall()}
+        post['reactions'] = {'heart': rxns.get('heart',0), 'support': rxns.get('support',0), 'needed': rxns.get('needed',0)}
+        cur.execute("SELECT reaction_type FROM post_reactions WHERE post_id=%s AND user_id=%s",
+                    (post_id, current_user_id))
+        post['my_reactions'] = [r['reaction_type'] for r in cur.fetchall()]
+        cur.execute("SELECT COUNT(*) as cnt FROM community_posts WHERE parent_id=%s AND is_hidden=FALSE",
+                    (post_id,))
+        post['reply_count'] = cur.fetchone()['cnt']
+        if post['is_anonymous']:
+            post['display_name'] = 'Anonymous Bloom'
+            post['avatar'] = AVATAR_STYLES['seedling']
+        else:
+            cur.execute("SELECT username, first_name, avatar_style FROM users WHERE id=%s",
+                        (post['user_id'],))
+            u = cur.fetchone()
+            if u:
+                post['display_name'] = u['first_name'] or u['username']
+                post['avatar'] = AVATAR_STYLES.get(u['avatar_style'] or 'seedling', AVATAR_STYLES['seedling'])
+            else:
+                post['display_name'] = 'Bloom Member'
+                post['avatar'] = AVATAR_STYLES['seedling']
+        cur.execute("SELECT id FROM post_flags WHERE post_id=%s AND user_id=%s",
+                    (post_id, current_user_id))
+        post['i_flagged'] = cur.fetchone() is not None
+        post['is_mine'] = post['user_id'] == current_user_id
+        # Follow state for post author
+        if not post['is_anonymous'] and not post['is_mine']:
+            cur.execute("SELECT id FROM user_follows WHERE follower_id=%s AND following_id=%s",
+                        (current_user_id, post['user_id']))
+            post['i_follow'] = cur.fetchone() is not None
+        else:
+            post['i_follow'] = False
+        enriched.append(post)
+    cur.close(); conn.close()
+    return enriched
+
+@app.route('/community')
+@login_required
+def community():
+    user = get_current_user()
+    tab = request.args.get('tab', 'foryou')
+    prompt = get_or_create_daily_prompt()
+    conn = get_db()
+    cur = conn.cursor()
+
+    if tab == 'following':
+        cur.execute("""
+            SELECT cp.* FROM community_posts cp
+            JOIN user_follows uf ON cp.user_id = uf.following_id
+            WHERE uf.follower_id=%s AND cp.parent_id IS NULL AND cp.is_hidden=FALSE
+            ORDER BY cp.created_at DESC LIMIT 50
+        """, (user['id'],))
+    else:
+        cur.execute("""
+            SELECT cp.* FROM community_posts cp
+            JOIN users u ON cp.user_id = u.id
+            WHERE cp.parent_id IS NULL AND cp.is_hidden=FALSE
+              AND (u.is_public=TRUE OR cp.user_id=%s)
+            ORDER BY cp.created_at DESC LIMIT 50
+        """, (user['id'],))
+    posts = enrich_posts(cur.fetchall(), user['id'])
+
+    cur.execute("SELECT COUNT(*) as cnt FROM user_follows WHERE follower_id=%s", (user['id'],))
+    following_count = cur.fetchone()['cnt']
+    cur.execute("SELECT COUNT(*) as cnt FROM user_follows WHERE following_id=%s", (user['id'],))
+    followers_count = cur.fetchone()['cnt']
+    cur.close(); conn.close()
+
+    score = calculate_garden_score(user['id'])
+    avatar = get_avatar_style(user)
+
+    return render_template('community.html',
+        user=user, prompt=prompt, posts=posts, tab=tab,
+        score=score, avatar=avatar, avatar_styles=AVATAR_STYLES,
+        following_count=following_count, followers_count=followers_count,
+    )
+
+@app.route('/community/post', methods=['POST'])
+@login_required
+def community_post():
+    import uuid
+    user = get_current_user()
+    content = request.form.get('content', '').strip()
+    prompt_id = request.form.get('prompt_id') or None
+    parent_id = request.form.get('parent_id') or None
+    is_anonymous = request.form.get('is_anonymous') == 'true'
+
+    if not content or len(content) < 2:
+        return jsonify({'success': False, 'error': 'Post cannot be empty.'}), 400
+    if len(content) > 500:
+        return jsonify({'success': False, 'error': 'Post must be under 500 characters.'}), 400
+
+    is_safe, reason = moderate_post_content(content)
+    is_hidden = not is_safe
+
+    post_image = None
+    img_file = request.files.get('post_image')
+    if img_file and img_file.filename:
+        allowed = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'heic'}
+        ext = img_file.filename.rsplit('.', 1)[-1].lower()
+        if ext in allowed:
+            fname = f"{uuid.uuid4().hex}.{ext}"
+            upload_dir = os.path.join(BASE_DIR, 'static', 'uploads', 'community')
+            os.makedirs(upload_dir, exist_ok=True)
+            img_file.save(os.path.join(upload_dir, fname))
+            post_image = f"uploads/community/{fname}"
+
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO community_posts
+        (user_id, prompt_id, parent_id, content, is_anonymous, post_image, is_hidden)
+        VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id
+    """, (user['id'], prompt_id, parent_id, content, is_anonymous, post_image, is_hidden))
+    new_id = cur.fetchone()['id']
+    conn.commit()
+
+    if is_hidden:
+        cur.execute("INSERT INTO moderation_warnings (user_id, post_id, reason) VALUES (%s,%s,%s)",
+                    (user['id'], new_id, reason))
+        conn.commit()
+        cur.close(); conn.close()
+        return jsonify({
+            'success': False, 'moderated': True,
+            'error': 'Your post was removed — it may not align with our community guidelines. '
+                     'Please keep The Garden Circle a safe, supportive space. 🌿'
+        })
+
+    cur.close(); conn.close()
+    return jsonify({'success': True, 'post_id': new_id})
+
+@app.route('/community/react', methods=['POST'])
+@login_required
+def community_react():
+    user = get_current_user()
+    data = request.get_json()
+    post_id = data.get('post_id')
+    reaction = data.get('reaction')
+    if reaction not in ('heart', 'support', 'needed'):
+        return jsonify({'success': False}), 400
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT id FROM post_reactions WHERE post_id=%s AND user_id=%s AND reaction_type=%s",
+                (post_id, user['id'], reaction))
+    if cur.fetchone():
+        cur.execute("DELETE FROM post_reactions WHERE post_id=%s AND user_id=%s AND reaction_type=%s",
+                    (post_id, user['id'], reaction))
+        toggled = False
+    else:
+        cur.execute("INSERT INTO post_reactions (post_id, user_id, reaction_type) VALUES (%s,%s,%s)",
+                    (post_id, user['id'], reaction))
+        toggled = True
+    conn.commit()
+    cur.execute("SELECT reaction_type, COUNT(*) as cnt FROM post_reactions WHERE post_id=%s GROUP BY reaction_type",
+                (post_id,))
+    counts = {r['reaction_type']: r['cnt'] for r in cur.fetchall()}
+    cur.close(); conn.close()
+    return jsonify({'success': True, 'active': toggled, 'counts': counts})
+
+@app.route('/community/flag', methods=['POST'])
+@login_required
+def community_flag():
+    user = get_current_user()
+    data = request.get_json()
+    post_id = data.get('post_id')
+    reason = data.get('reason', '').strip()
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT id FROM post_flags WHERE post_id=%s AND user_id=%s", (post_id, user['id']))
+    if cur.fetchone():
+        cur.close(); conn.close()
+        return jsonify({'success': False, 'error': 'Already flagged.'})
+    cur.execute("INSERT INTO post_flags (post_id, user_id, reason) VALUES (%s,%s,%s)",
+                (post_id, user['id'], reason))
+    cur.execute("SELECT content, user_id FROM community_posts WHERE id=%s", (post_id,))
+    post = cur.fetchone()
+    if post:
+        is_safe, mod_reason = moderate_post_content(post['content'])
+        if not is_safe:
+            cur.execute("UPDATE community_posts SET is_hidden=TRUE WHERE id=%s", (post_id,))
+            cur.execute("INSERT INTO moderation_warnings (user_id, post_id, reason) VALUES (%s,%s,%s)",
+                        (post['user_id'], post_id, mod_reason or reason))
+    conn.commit()
+    cur.close(); conn.close()
+    return jsonify({'success': True})
+
+@app.route('/community/follow', methods=['POST'])
+@login_required
+def community_follow():
+    user = get_current_user()
+    data = request.get_json()
+    target_id = data.get('user_id')
+    if not target_id or target_id == user['id']:
+        return jsonify({'success': False}), 400
+    conn = get_db()
+    cur = conn.cursor()
+    # Check target is public (or already following)
+    cur.execute("SELECT is_public FROM users WHERE id=%s", (target_id,))
+    target = cur.fetchone()
+    if not target:
+        cur.close(); conn.close()
+        return jsonify({'success': False, 'error': 'User not found.'}), 404
+    cur.execute("SELECT id FROM user_follows WHERE follower_id=%s AND following_id=%s",
+                (user['id'], target_id))
+    if cur.fetchone():
+        cur.execute("DELETE FROM user_follows WHERE follower_id=%s AND following_id=%s",
+                    (user['id'], target_id))
+        following = False
+    else:
+        cur.execute("INSERT INTO user_follows (follower_id, following_id) VALUES (%s,%s)",
+                    (user['id'], target_id))
+        following = True
+    conn.commit()
+    cur.close(); conn.close()
+    return jsonify({'success': True, 'following': following})
+
+@app.route('/community/replies/<int:post_id>')
+@login_required
+def community_replies(post_id):
+    user = get_current_user()
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT * FROM community_posts
+        WHERE parent_id=%s AND is_hidden=FALSE ORDER BY created_at ASC
+    """, (post_id,))
+    replies = enrich_posts(cur.fetchall(), user['id'])
+    cur.close(); conn.close()
+    return jsonify({'replies': [dict(r) for r in replies]})
+
+@app.route('/community/avatar', methods=['POST'])
+@login_required
+def community_set_avatar():
+    user = get_current_user()
+    data = request.get_json()
+    style = data.get('style')
+    if style not in AVATAR_STYLES:
+        return jsonify({'success': False}), 400
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("UPDATE users SET avatar_style=%s WHERE id=%s", (style, user['id']))
+    conn.commit()
+    cur.close(); conn.close()
+    return jsonify({'success': True, 'avatar': AVATAR_STYLES[style]})
+
+@app.route('/api/community-prompt')
+@login_required
+def api_community_prompt():
+    prompt = get_or_create_daily_prompt()
+    return jsonify({'prompt': prompt['prompt_text'] if prompt else None})
+
+@app.route('/community/search')
+@login_required
+def community_search():
+    """Search public users by username or first name."""
+    user = get_current_user()
+    q = request.args.get('q', '').strip()
+    if len(q) < 2:
+        return jsonify({'users': []})
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT u.id, u.username, u.first_name, u.last_name, u.avatar_style, u.is_public, u.bio
+        FROM users u
+        WHERE u.is_public = TRUE
+          AND u.id != %s
+          AND (
+            u.username ILIKE %s
+            OR u.first_name ILIKE %s
+            OR u.last_name  ILIKE %s
+          )
+        LIMIT 15
+    """, (user['id'], f'%{q}%', f'%{q}%', f'%{q}%'))
+    rows = cur.fetchall()
+    results = []
+    for r in rows:
+        cur.execute("SELECT id FROM user_follows WHERE follower_id=%s AND following_id=%s",
+                    (user['id'], r['id']))
+        i_follow = cur.fetchone() is not None
+        cur.execute("SELECT COUNT(*) as cnt FROM user_follows WHERE following_id=%s", (r['id'],))
+        follower_count = cur.fetchone()['cnt']
+        a = AVATAR_STYLES.get(r['avatar_style'] or 'seedling', AVATAR_STYLES['seedling'])
+        results.append({
+            'id': r['id'],
+            'username': r['username'],
+            'display_name': r['first_name'] or r['username'],
+            'bio': r['bio'] or '',
+            'avatar_emoji': a['emoji'],
+            'avatar_bg': a['bg'],
+            'i_follow': i_follow,
+            'followers': follower_count,
+        })
+    cur.close(); conn.close()
+    return jsonify({'users': results})
+
+@app.route('/community/profile/<int:target_id>')
+@login_required
+def community_profile(target_id):
+    """Public profile page for a user."""
+    current = get_current_user()
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM users WHERE id=%s", (target_id,))
+    target = cur.fetchone()
+    if not target:
+        cur.close(); conn.close()
+        flash('User not found.', 'error')
+        return redirect(url_for('community'))
+
+    # Only public profiles are viewable (unless it's your own)
+    if not target['is_public'] and target['id'] != current['id']:
+        cur.close(); conn.close()
+        flash('This profile is private.', 'info')
+        return redirect(url_for('community'))
+
+    cur.execute("SELECT COUNT(*) as cnt FROM user_follows WHERE follower_id=%s", (target_id,))
+    following_count = cur.fetchone()['cnt']
+    cur.execute("SELECT COUNT(*) as cnt FROM user_follows WHERE following_id=%s", (target_id,))
+    followers_count = cur.fetchone()['cnt']
+    cur.execute("SELECT id FROM user_follows WHERE follower_id=%s AND following_id=%s",
+                (current['id'], target_id))
+    i_follow = cur.fetchone() is not None
+
+    # Get their public posts
+    cur.execute("""
+        SELECT * FROM community_posts
+        WHERE user_id=%s AND parent_id IS NULL AND is_hidden=FALSE
+          AND is_anonymous=FALSE
+        ORDER BY created_at DESC LIMIT 20
+    """, (target_id,))
+    posts = enrich_posts(cur.fetchall(), current['id'])
+
+    score = calculate_garden_score(target_id)
+    cur.execute("SELECT COUNT(*) as cnt FROM garden_items WHERE user_id=%s", (target_id,))
+    plant_count = cur.fetchone()['cnt']
+    cur.close(); conn.close()
+
+    avatar = get_avatar_style(target)
+    my_avatar = get_avatar_style(current)
+    return render_template('community_profile.html',
+        target=target, current=current,
+        avatar=avatar, my_avatar=my_avatar,
+        following_count=following_count,
+        followers_count=followers_count,
+        i_follow=i_follow,
+        posts=posts,
+        score=score,
+        plant_count=plant_count,
+        avatar_styles=AVATAR_STYLES,
+    )
+
+@app.route('/community/privacy', methods=['POST'])
+@login_required
+def community_privacy():
+    """Toggle profile public/private."""
+    user = get_current_user()
+    data = request.get_json()
+    is_public = data.get('is_public', True)
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("UPDATE users SET is_public=%s WHERE id=%s", (is_public, user['id']))
+    conn.commit()
+    cur.close(); conn.close()
+    return jsonify({'success': True, 'is_public': is_public})
+
+@app.route('/community/bio', methods=['POST'])
+@login_required
+def community_bio():
+    """Update profile bio."""
+    user = get_current_user()
+    data = request.get_json()
+    bio = (data.get('bio') or '').strip()[:160]
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("UPDATE users SET bio=%s WHERE id=%s", (bio, user['id']))
+    conn.commit()
+    cur.close(); conn.close()
+    return jsonify({'success': True})
 
 # ── Run ───────────────────────────────────────────────────────────────────────
 

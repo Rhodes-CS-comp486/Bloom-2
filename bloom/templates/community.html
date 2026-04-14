@@ -1,0 +1,497 @@
+{% extends "base.html" %}
+{% from '_circle_macros.html' import render_post %}
+{% block title %}The Garden Circle — Bloom{% endblock %}
+
+{% block content %}
+<div class="circle-page">
+
+  <!-- Header -->
+  <div class="circle-header">
+    <div class="circle-header-text">
+      <h1>🌸 The Garden Circle</h1>
+      <p class="circle-subtitle">A safe, supportive space to share, reflect, and grow together.</p>
+    </div>
+    <div class="circle-my-profile">
+      <div class="circle-avatar-pill" style="background: {{ avatar.bg }}">
+        <span class="circle-avatar-emoji">{{ avatar.emoji }}</span>
+        <div class="circle-avatar-info">
+          <span class="circle-avatar-name">{{ user.first_name or user.username }}</span>
+          <span class="circle-avatar-stats">{{ following_count }} following · {{ followers_count }} followers</span>
+        </div>
+      </div>
+      <button class="circle-avatar-change-btn" onclick="openAvatarModal()">Change Avatar</button>
+    </div>
+  </div>
+
+  <!-- Search Users -->
+  <div class="circle-search-wrap">
+    <div class="circle-search-box">
+      <span class="circle-search-icon">🔍</span>
+      <input type="text" class="circle-search-input" id="userSearchInput"
+             placeholder="Search members by name or username…"
+             autocomplete="off"
+             oninput="searchUsers(this.value)">
+    </div>
+    <div class="circle-search-results" id="userSearchResults" style="display:none;"></div>
+  </div>
+
+  <!-- Daily Prompt -->
+  <div class="circle-prompt-card">
+    <div class="circle-prompt-header">
+      <span class="circle-prompt-badge">🌿 Today's Prompt</span>
+      <span class="circle-prompt-date">{{ prompt.prompt_date.strftime('%B %-d') if prompt else '' }}</span>
+    </div>
+    <p class="circle-prompt-text">{{ prompt.prompt_text if prompt else "Loading today's prompt\u2026" }}</p>
+    <button class="bloom-btn bloom-btn-primary" onclick="openPostModal(null)">Share your thoughts 🌸</button>
+  </div>
+
+  <!-- Feed Tabs -->
+  <div class="circle-tabs">
+    <a href="{{ url_for('community', tab='foryou') }}" class="circle-tab {% if tab == 'foryou' %}active{% endif %}">🌍 For You</a>
+    <a href="{{ url_for('community', tab='following') }}" class="circle-tab {% if tab == 'following' %}active{% endif %}">💜 Following</a>
+  </div>
+
+  <!-- Feed -->
+  <div class="circle-feed" id="circleFeed">
+    {% if posts %}
+      {% for post in posts %}{{ render_post(post, avatar, depth=0) }}{% endfor %}
+    {% else %}
+      <div class="circle-empty">
+        {% if tab == 'following' %}
+          <p>You're not following anyone yet. Jump into the For You feed and connect! 🌱</p>
+        {% else %}
+          <p>Be the first to share something today! 🌸</p>
+        {% endif %}
+        <button class="bloom-btn bloom-btn-secondary" onclick="openPostModal(null)">Start the conversation</button>
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+{# ── NEW POST MODAL ────────────────────────────────────────────────── #}
+<div class="circle-modal-overlay" id="postModal" style="display:none;" onclick="closeModalBg(event,'postModal')">
+  <div class="circle-modal">
+    <div class="circle-modal-header">
+      <h3 id="modalTitle">Share with the Circle</h3>
+      <button class="circle-modal-close" onclick="closePostModal()">✕</button>
+    </div>
+
+    <div class="circle-modal-prompt" id="modalPromptRef" style="display:none;"></div>
+
+    <div class="circle-modal-compose">
+      <div class="circle-avatar-md" style="background: {{ avatar.bg }}">{{ avatar.emoji }}</div>
+      <textarea class="bloom-input circle-compose-textarea" id="mainPostContent"
+                placeholder="What's on your mind? 🌿" maxlength="500" rows="4"
+                oninput="updateCharCount()"></textarea>
+    </div>
+    <div class="circle-char-count"><span id="charCount">0</span>/500</div>
+
+    <!-- Image attachment -->
+    <div class="circle-attach-row">
+      <button type="button" class="circle-attach-btn" onclick="document.getElementById('postImageInput').click()">
+        📷 Add photo
+      </button>
+      <input type="file" id="postImageInput" accept="image/*" style="display:none;" onchange="previewImage(this)">
+      <span class="circle-attach-hint">JPG, PNG, GIF, WEBP — max 10 MB</span>
+    </div>
+
+    <!-- Image preview -->
+    <div class="circle-img-preview-wrap" id="imgPreviewWrap" style="display:none;">
+      <img id="imgPreview" class="circle-img-preview" alt="Preview" />
+      <button class="circle-img-remove" onclick="removeImage()" title="Remove photo">✕</button>
+    </div>
+
+    <!-- Anonymous toggle -->
+    <div class="circle-modal-options">
+      <label class="circle-slide-label">
+        <input type="checkbox" class="circle-slide-check" id="mainAnon">
+        <span class="circle-slide-track circle-slide-anon"><span class="circle-slide-thumb"></span></span>
+        <span class="circle-slide-text">Post anonymously</span>
+      </label>
+    </div>
+
+    <div class="circle-post-error" id="postError" style="display:none;"></div>
+
+    <div class="circle-modal-footer">
+      <button class="bloom-btn bloom-btn-ghost" onclick="closePostModal()">Cancel</button>
+      <button class="bloom-btn bloom-btn-primary" onclick="submitMainPost()">Post to Circle 🌸</button>
+    </div>
+  </div>
+</div>
+
+{# ── AVATAR MODAL ──────────────────────────────────────────────────── #}
+<div class="circle-modal-overlay" id="avatarModal" style="display:none;" onclick="closeModalBg(event,'avatarModal')">
+  <div class="circle-modal circle-modal-sm">
+    <div class="circle-modal-header">
+      <h3>Choose Your Avatar</h3>
+      <button class="circle-modal-close" onclick="closeAvatarModal()">✕</button>
+    </div>
+    <p class="circle-avatar-modal-sub">Your botanical avatar represents you across The Garden Circle.</p>
+    <div class="circle-avatar-grid">
+      {% for key, style in avatar_styles.items() %}
+      <button class="circle-avatar-option {% if (user.avatar_style or 'seedling') == key %}selected{% endif %}"
+              data-style="{{ key }}" style="background: {{ style.bg }}"
+              onclick="selectAvatar('{{ key }}', this)">
+        <span class="circle-avatar-option-emoji">{{ style.emoji }}</span>
+        <span class="circle-avatar-option-label">{{ style.label }}</span>
+      </button>
+      {% endfor %}
+    </div>
+    <div class="circle-modal-footer">
+      <button class="bloom-btn bloom-btn-ghost" onclick="closeAvatarModal()">Cancel</button>
+      <button class="bloom-btn bloom-btn-primary" onclick="saveAvatar()">Save Avatar</button>
+    </div>
+  </div>
+</div>
+
+{# ── FLAG MODAL ────────────────────────────────────────────────────── #}
+<div class="circle-modal-overlay" id="flagModal" style="display:none;" onclick="closeModalBg(event,'flagModal')">
+  <div class="circle-modal circle-modal-sm">
+    <div class="circle-modal-header">
+      <h3>Flag this post</h3>
+      <button class="circle-modal-close" onclick="closeFlagModal()">✕</button>
+    </div>
+    <p class="circle-flag-sub">Help us keep The Garden Circle a safe, supportive space.</p>
+    <div class="circle-flag-options">
+      <label class="circle-flag-option"><input type="radio" name="flagReason" value="Harmful or offensive content"> Harmful or offensive content</label>
+      <label class="circle-flag-option"><input type="radio" name="flagReason" value="Harassment or bullying"> Harassment or bullying</label>
+      <label class="circle-flag-option"><input type="radio" name="flagReason" value="Spam or irrelevant"> Spam or irrelevant</label>
+      <label class="circle-flag-option"><input type="radio" name="flagReason" value="Other"> Other</label>
+    </div>
+    <div class="circle-modal-footer">
+      <button class="bloom-btn bloom-btn-ghost" onclick="closeFlagModal()">Cancel</button>
+      <button class="bloom-btn bloom-btn-danger" onclick="submitFlag()">Submit Flag</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const PROMPT_ID = {{ prompt.id if prompt else 'null' }};
+let currentParentId = null;
+let pendingFlagPostId = null;
+let pendingFlagBtn = null;
+let selectedAvatarStyle = '{{ user.avatar_style or "seedling" }}';
+
+// ── MODAL HELPERS ───────────────────────────────────────────────────
+function closeModalBg(e, id) {
+  if (e.target.classList.contains('circle-modal-overlay'))
+    document.getElementById(id).style.display = 'none';
+}
+
+function openPostModal(parentId) {
+  currentParentId = parentId;
+  document.getElementById('mainPostContent').value = '';
+  document.getElementById('charCount').textContent = '0';
+  document.getElementById('postError').style.display = 'none';
+  document.getElementById('mainAnon').checked = false;
+  removeImage();
+
+  const title = document.getElementById('modalTitle');
+  const promptRef = document.getElementById('modalPromptRef');
+  if (parentId) {
+    title.textContent = 'Reply to this post';
+    promptRef.style.display = 'none';
+    promptRef.innerHTML = '';
+  } else {
+    title.textContent = 'Share with the Circle';
+    const pt = document.querySelector('.circle-prompt-text');
+    if (pt) {
+      promptRef.innerHTML = `<span class="circle-prompt-badge">🌿 Today's Prompt</span><p>${pt.textContent}</p>`;
+      promptRef.style.display = 'block';
+    }
+  }
+  document.getElementById('postModal').style.display = 'flex';
+  setTimeout(() => document.getElementById('mainPostContent').focus(), 100);
+}
+function closePostModal() { document.getElementById('postModal').style.display = 'none'; }
+function openAvatarModal() { document.getElementById('avatarModal').style.display = 'flex'; }
+function closeAvatarModal() { document.getElementById('avatarModal').style.display = 'none'; }
+function openFlagModal(postId, btn) {
+  pendingFlagPostId = postId; pendingFlagBtn = btn;
+  document.querySelectorAll('input[name="flagReason"]').forEach(r => r.checked = false);
+  document.getElementById('flagModal').style.display = 'flex';
+}
+function closeFlagModal() { document.getElementById('flagModal').style.display = 'none'; }
+
+// ── CHAR COUNT ──────────────────────────────────────────────────────
+function updateCharCount() {
+  const len = document.getElementById('mainPostContent').value.length;
+  const el = document.getElementById('charCount');
+  el.textContent = len;
+  el.style.color = len > 450 ? 'var(--rose)' : 'var(--ink-soft)';
+}
+
+// ── IMAGE HANDLING ──────────────────────────────────────────────────
+function previewImage(input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.size > 10 * 1024 * 1024) {
+    showPostError('Image must be under 10 MB.');
+    input.value = '';
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('imgPreview').src = e.target.result;
+    document.getElementById('imgPreviewWrap').style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeImage() {
+  document.getElementById('postImageInput').value = '';
+  document.getElementById('imgPreview').src = '';
+  document.getElementById('imgPreviewWrap').style.display = 'none';
+}
+
+// ── SUBMIT MAIN POST ────────────────────────────────────────────────
+async function submitMainPost() {
+  const content = document.getElementById('mainPostContent').value.trim();
+  const isAnon = document.getElementById('mainAnon').checked;
+  const imgInput = document.getElementById('postImageInput');
+
+  if (!content) { showPostError('Please write something first. 🌿'); return; }
+
+  const fd = new FormData();
+  fd.append('content', content);
+  fd.append('prompt_id', PROMPT_ID || '');
+  fd.append('parent_id', currentParentId || '');
+  fd.append('is_anonymous', isAnon ? 'true' : 'false');
+  if (imgInput.files[0]) fd.append('post_image', imgInput.files[0]);
+
+  const res = await fetch('/community/post', { method: 'POST', body: fd });
+  const data = await res.json();
+  if (data.success) { closePostModal(); location.reload(); }
+  else if (data.moderated) { showPostError(data.error); }
+  else { showPostError(data.error || 'Something went wrong. Please try again.'); }
+}
+
+function showPostError(msg) {
+  const el = document.getElementById('postError');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+// ── SUBMIT INLINE REPLY ─────────────────────────────────────────────
+async function submitPost(parentId) {
+  const input = document.getElementById(`reply-input-${parentId}`);
+  const content = input.value.trim();
+  const isAnon = document.getElementById(`reply-anon-${parentId}`).checked;
+  const imgInput = document.getElementById(`reply-img-${parentId}`);
+  if (!content) return;
+
+  const fd = new FormData();
+  fd.append('content', content);
+  fd.append('prompt_id', PROMPT_ID || '');
+  fd.append('parent_id', parentId);
+  fd.append('is_anonymous', isAnon ? 'true' : 'false');
+  if (imgInput && imgInput.files[0]) fd.append('post_image', imgInput.files[0]);
+
+  const res = await fetch('/community/post', { method: 'POST', body: fd });
+  const data = await res.json();
+  if (data.success) {
+    input.value = '';
+    if (imgInput) { imgInput.value = ''; }
+    const previewWrap = document.getElementById(`reply-img-preview-${parentId}`);
+    if (previewWrap) previewWrap.style.display = 'none';
+    loadReplies(parentId);
+  } else if (data.moderated) {
+    alert(data.error);
+  } else {
+    alert(data.error || 'Could not post reply.');
+  }
+}
+
+function previewReplyImage(input, parentId) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const wrap = document.getElementById(`reply-img-preview-${parentId}`);
+    const img = document.getElementById(`reply-img-preview-img-${parentId}`);
+    if (wrap && img) { img.src = e.target.result; wrap.style.display = 'block'; }
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeReplyImage(parentId) {
+  const input = document.getElementById(`reply-img-${parentId}`);
+  const wrap = document.getElementById(`reply-img-preview-${parentId}`);
+  if (input) input.value = '';
+  if (wrap) wrap.style.display = 'none';
+}
+
+// ── TOGGLE & LOAD REPLIES ───────────────────────────────────────────
+async function toggleReplies(postId, btn) {
+  const thread = document.getElementById(`replies-${postId}`);
+  if (thread.style.display === 'none') {
+    thread.style.display = 'block';
+    await loadReplies(postId);
+  } else {
+    thread.style.display = 'none';
+  }
+}
+
+async function loadReplies(postId) {
+  const container = document.getElementById(`replies-inner-${postId}`);
+  container.innerHTML = '<div class="circle-replies-loading">Loading replies… 🌿</div>';
+  const res = await fetch(`/community/replies/${postId}`);
+  const data = await res.json();
+  if (!data.replies || !data.replies.length) {
+    container.innerHTML = '<p class="circle-no-replies">No replies yet. Be the first! 🌸</p>';
+    return;
+  }
+  const reactionLabels = { heart: '❤️', support: '💜', needed: '🌿' };
+  container.innerHTML = data.replies.map(r => {
+    const avatarBg = r.avatar ? r.avatar.bg : '#e8f4ec';
+    const avatarEmoji = r.avatar ? r.avatar.emoji : '🌱';
+    const imgHtml = r.post_image
+      ? `<div class="circle-post-img-wrap"><img class="circle-post-img" src="/static/${r.post_image}" alt="Attached photo" loading="lazy" onclick="openImgViewer(this.src)" /></div>`
+      : '';
+    const reactions = Object.entries(reactionLabels).map(([type, emoji]) =>
+      `<button class="circle-reaction-btn ${(r.my_reactions||[]).includes(type)?'active':''}" onclick="react(${r.id},'${type}',this)">${emoji} <span class="rxn-count">${r.reactions[type]||0}</span></button>`
+    ).join('');
+    const flagBtn = !r.is_mine
+      ? `<button class="circle-flag-btn ${r.i_flagged?'flagged':''}" onclick="flagPost(${r.id},this)">${r.i_flagged?'🚩':'⚑'}</button>`
+      : '';
+    const followBtn = !r.is_mine && !r.is_anonymous
+      ? `<button class="circle-follow-btn" onclick="toggleFollow(${r.user_id},this)">+ Follow</button>`
+      : '';
+    return `<div class="circle-post circle-reply" id="post-${r.id}">
+      <div class="circle-post-header">
+        <div class="circle-post-avatar" style="background:${avatarBg}">${avatarEmoji}</div>
+        <div class="circle-post-meta"><span class="circle-post-author">${r.display_name}</span></div>
+        <div class="circle-post-actions-right">${followBtn}${flagBtn}</div>
+      </div>
+      <div class="circle-post-content"><p>${r.content}</p>${imgHtml}</div>
+      <div class="circle-post-footer"><div class="circle-reactions">${reactions}</div></div>
+    </div>`;
+  }).join('');
+}
+
+// ── REACTIONS ───────────────────────────────────────────────────────
+async function react(postId, type, btn) {
+  const res = await fetch('/community/react', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ post_id: postId, reaction: type })
+  });
+  const data = await res.json();
+  if (data.success) {
+    btn.classList.toggle('active', data.active);
+    btn.querySelector('.rxn-count').textContent = data.counts[type] || 0;
+  }
+}
+
+// ── FLAG ────────────────────────────────────────────────────────────
+function flagPost(postId, btn) {
+  if (btn.classList.contains('flagged')) return;
+  openFlagModal(postId, btn);
+}
+async function submitFlag() {
+  const reason = document.querySelector('input[name="flagReason"]:checked');
+  if (!reason) { alert('Please select a reason.'); return; }
+  const res = await fetch('/community/flag', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ post_id: pendingFlagPostId, reason: reason.value })
+  });
+  const data = await res.json();
+  closeFlagModal();
+  if (data.success && pendingFlagBtn) {
+    pendingFlagBtn.classList.add('flagged');
+    pendingFlagBtn.innerHTML = '🚩';
+  }
+}
+
+// ── FOLLOW ──────────────────────────────────────────────────────────
+async function toggleFollow(targetId, btn) {
+  const res = await fetch('/community/follow', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_id: targetId })
+  });
+  const data = await res.json();
+  if (data.success) {
+    btn.textContent = data.following ? '✓ Following' : '+ Follow';
+    btn.classList.toggle('following', data.following);
+  }
+}
+
+// ── AVATAR ──────────────────────────────────────────────────────────
+function selectAvatar(style, btn) {
+  selectedAvatarStyle = style;
+  document.querySelectorAll('.circle-avatar-option').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+}
+async function saveAvatar() {
+  const res = await fetch('/community/avatar', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ style: selectedAvatarStyle })
+  });
+  const data = await res.json();
+  if (data.success) { closeAvatarModal(); location.reload(); }
+}
+
+// ── IMAGE VIEWER (lightbox) ─────────────────────────────────────────
+function openImgViewer(src) {
+  const ov = document.createElement('div');
+  ov.className = 'circle-img-viewer';
+  ov.innerHTML = `<img src="${src}" /><button onclick="this.parentElement.remove()">✕</button>`;
+  ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
+  document.body.appendChild(ov);
+}
+
+// ── USER SEARCH ─────────────────────────────────────────────────────
+let searchTimer = null;
+function searchUsers(q) {
+  clearTimeout(searchTimer);
+  const results = document.getElementById('userSearchResults');
+  if (q.trim().length < 2) { results.style.display = 'none'; return; }
+  searchTimer = setTimeout(async () => {
+    const res = await fetch(`/community/search?q=${encodeURIComponent(q)}`);
+    const data = await res.json();
+    if (!data.users.length) {
+      results.innerHTML = `<div class="circle-search-empty">No members found for "<strong>${q}</strong>" 🌱</div>`;
+    } else {
+      results.innerHTML = data.users.map(u => `
+        <div class="circle-search-result">
+          <a class="circle-search-result-link" href="/community/profile/${u.id}">
+            <div class="circle-search-avatar" style="background:${u.avatar_bg}">${u.avatar_emoji}</div>
+            <div class="circle-search-info">
+              <span class="circle-search-name">${u.display_name}</span>
+              <span class="circle-search-handle">@${u.username} · ${u.followers} follower${u.followers !== 1 ? 's' : ''}</span>
+              ${u.bio ? `<span class="circle-search-bio">${u.bio}</span>` : ''}
+            </div>
+          </a>
+          <button class="circle-follow-btn ${u.i_follow ? 'following' : ''}"
+                  id="srch-follow-${u.id}"
+                  onclick="searchFollow(${u.id}, this)">
+            ${u.i_follow ? '✓ Following' : '+ Follow'}
+          </button>
+        </div>`).join('');
+    }
+    results.style.display = 'block';
+  }, 320);
+}
+
+async function searchFollow(targetId, btn) {
+  const res = await fetch('/community/follow', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_id: targetId })
+  });
+  const data = await res.json();
+  if (data.success) {
+    btn.textContent = data.following ? '✓ Following' : '+ Follow';
+    btn.classList.toggle('following', data.following);
+  }
+}
+
+// Close search results when clicking outside
+document.addEventListener('click', e => {
+  if (!e.target.closest('.circle-search-wrap')) {
+    document.getElementById('userSearchResults').style.display = 'none';
+  }
+});
+</script>
+{% endblock %}

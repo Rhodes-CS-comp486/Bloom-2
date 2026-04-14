@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+{% from '_circle_macros.html' import render_post %}
+{% block title %}{{ target.first_name or target.username }} — The Garden Circle{% endblock %}
+
+{% block content %}
+<div class="circle-page">
+
+  <!-- Profile Card -->
+  <div class="circle-profile-card">
+    <div class="circle-profile-avatar-lg" style="background: {{ avatar.bg }}">
+      {{ avatar.emoji }}
+    </div>
+    <div class="circle-profile-info">
+      <div class="circle-profile-name-row">
+        <h1 class="circle-profile-name">{{ target.first_name or target.username }}</h1>
+        {% if not target.is_public %}
+          <span class="circle-profile-badge circle-badge-private">🔒 Private</span>
+        {% else %}
+          <span class="circle-profile-badge circle-badge-public">🌍 Public</span>
+        {% endif %}
+      </div>
+      <span class="circle-profile-handle">@{{ target.username }}</span>
+      {% if target.bio %}
+        <p class="circle-profile-bio">{{ target.bio }}</p>
+      {% endif %}
+      <div class="circle-profile-stats">
+        <span class="circle-profile-stat"><strong>{{ following_count }}</strong> following</span>
+        <span class="circle-profile-stat-sep">·</span>
+        <span class="circle-profile-stat"><strong>{{ followers_count }}</strong> followers</span>
+        <span class="circle-profile-stat-sep">·</span>
+        <span class="circle-profile-stat"><strong>{{ score }}</strong> bloom pts</span>
+        <span class="circle-profile-stat-sep">·</span>
+        <span class="circle-profile-stat">🌱 <strong>{{ plant_count }}</strong> plant{{ 's' if plant_count != 1 }}</span>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="circle-profile-actions">
+      {% if target.id == current.id %}
+        <!-- Own profile — edit controls -->
+        <div class="circle-own-controls">
+          <div class="circle-bio-edit">
+            <textarea class="bloom-input circle-bio-textarea" id="bioInput"
+                      placeholder="Add a short bio (160 chars)…"
+                      maxlength="160">{{ target.bio or '' }}</textarea>
+            <button class="bloom-btn bloom-btn-secondary" onclick="saveBio()">Save Bio</button>
+          </div>
+          <label class="circle-slide-label circle-privacy-toggle">
+            <input type="checkbox" class="circle-slide-check" id="privacyToggle"
+                   {% if target.is_public %}checked{% endif %}
+                   onchange="togglePrivacy(this.checked)">
+            <span class="circle-slide-track circle-slide-garden"><span class="circle-slide-thumb"></span></span>
+            <span class="circle-slide-text" id="privacyLabel">
+              {% if target.is_public %}Profile is Public{% else %}Profile is Private{% endif %}
+            </span>
+          </label>
+          <a href="{{ url_for('community') }}" class="bloom-btn bloom-btn-ghost">← Back to Circle</a>
+        </div>
+      {% else %}
+        <button class="bloom-btn {% if i_follow %}bloom-btn-ghost{% else %}bloom-btn-primary{% endif %}"
+                id="profileFollowBtn"
+                onclick="profileFollow({{ target.id }}, this)">
+          {% if i_follow %}✓ Following{% else %}+ Follow{% endif %}
+        </button>
+        <a href="{{ url_for('community') }}" class="bloom-btn bloom-btn-ghost">← Back to Circle</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Posts Section -->
+  <div class="circle-profile-posts-header">
+    <h2>Posts by {{ target.first_name or target.username }}</h2>
+  </div>
+
+  <div class="circle-feed">
+    {% if posts %}
+      {% for post in posts %}{{ render_post(post, my_avatar, depth=0) }}{% endfor %}
+    {% else %}
+      <div class="circle-empty">
+        <p>No posts yet from {{ target.first_name or target.username }}. 🌱</p>
+        <a href="{{ url_for('community') }}" class="bloom-btn bloom-btn-secondary">Back to the Circle</a>
+      </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const PROMPT_ID = null; // profiles don't post inline
+
+// ── BIO & PRIVACY (own profile only) ───────────────────────────────
+async function saveBio() {
+  const bio = document.getElementById('bioInput').value.trim();
+  const res = await fetch('/community/bio', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ bio })
+  });
+  const data = await res.json();
+  if (data.success) {
+    const btn = document.querySelector('.circle-bio-edit .bloom-btn');
+    btn.textContent = 'Saved ✓';
+    setTimeout(() => btn.textContent = 'Save Bio', 2000);
+  }
+}
+
+async function togglePrivacy(isPublic) {
+  const res = await fetch('/community/privacy', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ is_public: isPublic })
+  });
+  const data = await res.json();
+  if (data.success) {
+    document.getElementById('privacyLabel').textContent =
+      isPublic ? 'Profile is Public' : 'Profile is Private';
+  }
+}
+
+// ── FOLLOW (other profiles) ─────────────────────────────────────────
+async function profileFollow(targetId, btn) {
+  const res = await fetch('/community/follow', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_id: targetId })
+  });
+  const data = await res.json();
+  if (data.success) {
+    if (data.following) {
+      btn.textContent = '✓ Following';
+      btn.classList.remove('bloom-btn-primary');
+      btn.classList.add('bloom-btn-ghost');
+    } else {
+      btn.textContent = '+ Follow';
+      btn.classList.remove('bloom-btn-ghost');
+      btn.classList.add('bloom-btn-primary');
+    }
+  }
+}
+
+// ── REACTIONS & FLAGS (from macro) ─────────────────────────────────
+async function react(postId, type, btn) {
+  const res = await fetch('/community/react', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ post_id: postId, reaction: type })
+  });
+  const data = await res.json();
+  if (data.success) {
+    btn.classList.toggle('active', data.active);
+    btn.querySelector('.rxn-count').textContent = data.counts[type] || 0;
+  }
+}
+
+function flagPost(postId, btn) {
+  if (btn.classList.contains('flagged')) return;
+  // simple inline flag on profile page
+  if (!confirm('Flag this post as harmful or inappropriate?')) return;
+  fetch('/community/flag', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ post_id: postId, reason: 'Flagged from profile' })
+  }).then(r => r.json()).then(data => {
+    if (data.success) { btn.classList.add('flagged'); btn.innerHTML = '🚩'; }
+  });
+}
+
+async function toggleFollow(targetId, btn) {
+  const res = await fetch('/community/follow', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_id: targetId })
+  });
+  const data = await res.json();
+  if (data.success) {
+    btn.textContent = data.following ? '✓ Following' : '+ Follow';
+    btn.classList.toggle('following', data.following);
+  }
+}
+
+function openImgViewer(src) {
+  const ov = document.createElement('div');
+  ov.className = 'circle-img-viewer';
+  ov.innerHTML = `<img src="${src}" /><button onclick="this.parentElement.remove()">✕</button>`;
+  ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
+  document.body.appendChild(ov);
+}
+
+// Stubs for macro reply buttons (disabled on profile page)
+function openPostModal() {}
+async function toggleReplies(postId) {
+  const thread = document.getElementById(`replies-${postId}`);
+  if (thread) thread.style.display = thread.style.display === 'none' ? 'block' : 'none';
+}
+async function loadReplies() {}
+async function submitPost() {}
+function previewReplyImage() {}
+function removeReplyImage() {}
+</script>
+{% endblock %}
