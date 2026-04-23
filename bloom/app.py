@@ -517,7 +517,13 @@ def dashboard():
             break
 
     # Period prediction
-    next_start, next_end = predict_next_period(user)
+    cur.execute("""SELECT start_date, end_date FROM periods
+                   WHERE user_id=%s ORDER BY start_date DESC LIMIT 12""", (user['id'],))
+    period_rows = cur.fetchall()
+    periods_for_pred = [{"start_date": r["start_date"], "end_date": r["end_date"]} for r in period_rows]
+    prediction = compute_cycle_prediction(periods_for_pred, user)
+    next_start = prediction.get("next_period")
+    next_end = prediction.get("range_end")
     days_until = (next_start - date.today()).days if next_start else None
 
     cur.close()
@@ -1498,6 +1504,25 @@ def compute_cycle_prediction(periods, user=None):
         return base
     user_period_len = (user or {}).get("period_length") or 5
     user_cycle = (user or {}).get("cycle_length")
+    cycle_lengths = [
+        (periods[i]["start_date"] - periods[i+1]["start_date"]).days
+        for i in range(len(periods)-1)
+        if (periods[i]["start_date"] - periods[i+1]["start_date"]).days > 10
+    ]
+    if len(cycle_lengths) >= 2:
+        # Weighted average: most recent cycle gets highest weight
+        weights = list(range(len(cycle_lengths), 0, -1))
+        weighted_avg = round(sum(w * c for w, c in zip(weights, cycle_lengths)) / sum(weights))
+        last_start = periods[0]["start_date"]
+        next_start = last_start + timedelta(days=weighted_avg)
+        next_end = next_start + timedelta(days=user_period_len - 1)
+        base.update({
+            "status": "ok", "avg_cycle_length": weighted_avg,
+            "min_cycle_length": min(cycle_lengths), "max_cycle_length": max(cycle_lengths),
+            "next_period": next_start, "range_start": next_start, "range_end": next_end,
+            "cycle_length": weighted_avg
+        })
+        return base
     if user_cycle:
         last_start = periods[0]["start_date"]
         next_start = last_start + timedelta(days=user_cycle)
@@ -1505,24 +1530,7 @@ def compute_cycle_prediction(periods, user=None):
         base.update({"status": "user_defined", "cycle_length": user_cycle,
                      "next_period": next_start, "range_start": next_start, "range_end": next_end})
         return base
-    cycle_lengths = [
-        (periods[i]["start_date"] - periods[i+1]["start_date"]).days
-        for i in range(len(periods)-1)
-        if (periods[i]["start_date"] - periods[i+1]["start_date"]).days > 10
-    ]
-    if not cycle_lengths:
-        base.update({"status": "no_valid_cycles", "message": "Not enough valid cycle data."})
-        return base
-    avg_len = round(sum(cycle_lengths) / len(cycle_lengths))
-    last_start = periods[0]["start_date"]
-    next_start = last_start + timedelta(days=avg_len)
-    next_end = next_start + timedelta(days=user_period_len - 1)
-    base.update({
-        "status": "ok", "avg_cycle_length": avg_len,
-        "min_cycle_length": min(cycle_lengths), "max_cycle_length": max(cycle_lengths),
-        "next_period": next_start, "range_start": next_start, "range_end": next_end,
-        "cycle_length": avg_len
-    })
+    base.update({"status": "no_valid_cycles", "message": "Not enough valid cycle data."})
     return base
 
 # ── GARDEN CIRCLE ─────────────────────────────────────────────────────────────
