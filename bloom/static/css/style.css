@@ -938,7 +938,7 @@ em { font-style: italic; color: var(--rose); }
 .checkin-rec-row {
   display: flex;
   gap: 1.25rem;
-  align-items: flex-start;
+  align-items: stretch;
 }
 .checkin-rec-row .checkin-card {
   flex: 1;
