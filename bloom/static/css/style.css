@@ -934,18 +934,25 @@ em { font-style: italic; color: var(--rose); }
 .habit-toggle-btn.toggled { opacity: 1; }
 .habit-toggle-btn:hover { opacity: 1; transform: scale(1.03); }
 
+/* ── Check-in + Recommendation row ────────────────────────────── */
+.checkin-rec-row {
+  display: flex;
+  gap: 1.25rem;
+  align-items: stretch;
+}
+.checkin-rec-row .checkin-card {
+  flex: 1;
+}
+.checkin-rec-row .suggestion-card {
+  flex: 1;
+}
+
 /* ── Suggestion Card ───────────────────────────────────────────── */
 .suggestion-card {
-  background: var(--white);
-  border-radius: var(--radius);
-  padding: 1.5rem 1.75rem;
-  box-shadow: var(--shadow);
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  max-width: 600px;
-  margin: 0 auto 1.5rem auto;
-  border-left: 4px solid var(--white);
+  border-left: 4px solid var(--rose-light, #f2c4bb);
   animation: fadeIn 0.35s ease-out;
 }
 
@@ -1840,6 +1847,7 @@ em { font-style: italic; color: var(--rose); }
   .auth-art { display: none; }
   .stats-row { grid-template-columns: repeat(2, 1fr); }
   .dash-grid { grid-template-columns: 1fr; }
+  .checkin-rec-row { flex-direction: column; }
   .bloom-nav { padding: 0 1rem; gap: 1rem; }
   .nav-links { gap: 0; }
   .nav-link span:last-child { display: none; }

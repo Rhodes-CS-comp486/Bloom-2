@@ -36,12 +36,13 @@
       {% if days_until_period < 0 %}
         <strong>Period active</strong> — Take care of yourself today 💕
       {% elif days_until_period == 0 %}
-        <strong>Period expected today</strong> — predicted {{ next_period_start.strftime('%b %-d') }}
+        <strong>Period expected today</strong> —
+        {{ next_period_start.strftime('%b %-d') }}{% if next_period_end and next_period_end != next_period_start %} – {{ next_period_end.strftime('%b %-d') }}{% endif %}
       {% elif days_until_period <= 5 %}
         <strong>Period in {{ days_until_period }} day{{ 's' if days_until_period != 1 }}</strong>
-        — predicted {{ next_period_start.strftime('%b %-d') }}
+        — {{ next_period_start.strftime('%b %-d') }}{% if next_period_end and next_period_end != next_period_start %} – {{ next_period_end.strftime('%b %-d') }}{% endif %}
       {% else %}
-        Next period predicted <strong>{{ next_period_start.strftime('%B %-d') }}</strong>
+        Next period predicted <strong>{{ next_period_start.strftime('%b %-d') }}{% if next_period_end and next_period_end != next_period_start %} – {{ next_period_end.strftime('%b %-d') }}{% endif %}</strong>
         — {{ days_until_period }} days away
       {% endif %}
     </div>
@@ -115,7 +116,10 @@
         </a>
       </div>
     </div>
+  </div>
 
+  <!-- Check-in + Recommendation row -->
+  <div class="checkin-rec-row">
     <!-- Today's Check-in -->
     <div class="dash-card checkin-card">
       <div class="card-header">
@@ -161,100 +165,78 @@
         </div>
       {% endif %}
     </div>
-    <p class="insight-message"></p>
 
-</div>
-
-
-
-    <!-- Habits -->
-    <div class="dash-card habits-card">
-      <div class="card-header">
-        <h2>Today's Habits</h2>
-        <a href="{{ url_for('habits') }}" class="card-link">All habits →</a>
-      </div>
-      {% if habits %}
-        <div class="habit-list">
-          {% for habit in habits %}
-          <div class="habit-item" id="habit-{{ habit.id }}">
-            <button class="habit-toggle {% if habit_status.get(habit.id) %}completed{% endif %}"
-                    onclick="toggleHabit({{ habit.id }}, this)"
-                    style="--habit-color: {{ habit.color }}">
-              <span class="toggle-icon">{% if habit_status.get(habit.id) %}✓{% else %}○{% endif %}</span>
-            </button>
-            <span class="habit-name" style="color: {% if habit_status.get(habit.id) %}#aaa{% else %}inherit{% endif %}">
-              {{ habit.icon }} {{ habit.name }}
-            </span>
-          </div>
-          {% endfor %}
-        </div>
-      {% else %}
-        <p class="empty-state">No habits yet. <a href="{{ url_for('habits') }}">Add some →</a></p>
-      {% endif %}
-    </div>
-      <!-- Suggestions -->
-
-<!-- your dashboard content -->
-      <div id="suggestion-card" class="suggestion-card hidden">
-    <div class="sug-header">
-
+    <!-- Recommendation -->
+    <div id="suggestion-card" class="suggestion-card dash-card hidden">
+      <div class="sug-header">
         <h3 class="sug-title">Recommendation</h3>
-    </div>
-
-    <p class="sug-message"></p>
-
-    <div class="sug-actions">
-        <button class="sug-btn accept" onclick="acceptSuggestion()">Accept</button>
+      </div>
+      <p class="sug-message"></p>
+      <div class="sug-actions">
         <button class="sug-btn dismiss" onclick="dismissSuggestion()">Dismiss</button>
+      </div>
     </div>
-</div>
-      <!-- Planning -->
+  </div>
 
-<div class="dash-card planning-card">
+  <!-- Habits -->
+  <div class="dash-card habits-card">
     <div class="card-header">
-        <h2>Cycle Planning</h2>
+      <h2>Today's Habits</h2>
+      <a href="{{ url_for('habits') }}" class="card-link">All habits →</a>
     </div>
+    {% if habits %}
+      <div class="habit-list">
+        {% for habit in habits %}
+        <div class="habit-item" id="habit-{{ habit.id }}">
+          <button class="habit-toggle {% if habit_status.get(habit.id) %}completed{% endif %}"
+                  onclick="toggleHabit({{ habit.id }}, this)"
+                  style="--habit-color: {{ habit.color }}">
+            <span class="toggle-icon">{% if habit_status.get(habit.id) %}✓{% else %}○{% endif %}</span>
+          </button>
+          <span class="habit-name" style="color: {% if habit_status.get(habit.id) %}#aaa{% else %}inherit{% endif %}">
+            {{ habit.icon }} {{ habit.name }}
+          </span>
+        </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="empty-state">No habits yet. <a href="{{ url_for('habits') }}">Add some →</a></p>
+    {% endif %}
+  </div>
 
-    <div id="planningContent">
-        <p>Loading...</p>
+  <!-- Log Period -->
+  <div class="dash-card period-log-card">
+    <div class="card-header">
+      <h2>Log Period</h2>
+      <a href="{{ url_for('calendar_view') }}" class="card-link">Full calendar →</a>
     </div>
-</div>
-
-
-    <!-- Log Period -->
-    <div class="dash-card period-log-card">
-      <div class="card-header">
-        <h2>Log Period</h2>
-        <a href="{{ url_for('calendar_view') }}" class="card-link">Full calendar →</a>
+    <div class="period-logger">
+      <div class="form-group">
+        <label>Start Date</label>
+        <input type="date" id="periodStart" class="bloom-input" value="{{ today }}"/>
       </div>
-      <div class="period-logger">
-        <div class="form-group">
-          <label>Start Date</label>
-          <input type="date" id="periodStart" class="bloom-input" value="{{ today }}"/>
-        </div>
-        <div class="form-group">
-          <label>End Date <span class="label-hint">(optional)</span></label>
-          <input type="date" id="periodEnd" class="bloom-input"/>
-        </div>
-        <div class="form-group">
-          <label>Flow</label>
-          <div class="flow-picker">
-            <label class="flow-option">
-              <input type="radio" name="flow" value="light"/> <span>Light</span>
-            </label>
-            <label class="flow-option">
-              <input type="radio" name="flow" value="medium" checked/> <span>Medium</span>
-            </label>
-            <label class="flow-option">
-              <input type="radio" name="flow" value="heavy"/> <span>Heavy</span>
-            </label>
-          </div>
-        </div>
-        <button class="bloom-btn bloom-btn-secondary" onclick="logPeriod()">
-          🌹 Log Period
-        </button>
-        <div id="periodMsg" class="period-msg"></div>
+      <div class="form-group">
+        <label>End Date <span class="label-hint">(optional)</span></label>
+        <input type="date" id="periodEnd" class="bloom-input"/>
       </div>
+      <div class="form-group">
+        <label>Flow</label>
+        <div class="flow-picker">
+          <label class="flow-option">
+            <input type="radio" name="flow" value="light"/> <span>Light</span>
+          </label>
+          <label class="flow-option">
+            <input type="radio" name="flow" value="medium" checked/> <span>Medium</span>
+          </label>
+          <label class="flow-option">
+            <input type="radio" name="flow" value="heavy"/> <span>Heavy</span>
+          </label>
+        </div>
+      </div>
+      <button class="bloom-btn bloom-btn-secondary" onclick="logPeriod()">
+        🌹 Log Period
+      </button>
+      <div id="periodMsg" class="period-msg"></div>
     </div>
   </div>
 </div>
@@ -309,69 +291,6 @@ document.addEventListener("DOMContentLoaded", function () {
                 document.getElementById("suggestion-card").classList.remove("hidden");
             });
     }
-fetch('/api/planning')
-    .then(res => res.json())
-    .then(prediction => {
-        const container = document.getElementById("planningContent");
-
-        function fmt(dateStr) {
-            if (!dateStr) return "—";
-            const d = new Date(dateStr);
-            return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-        }
-
-        // No data
-        if (prediction.status === "no_data") {
-
-            return;
-        }
-
-        // Single cycle
-        if (prediction.status === "single_cycle") {
-            container.innerHTML = `
-                <p>Next predicted period:</p>
-                <p class="planning-highlight">${fmt(prediction.next_period)}</p>
-
-            `;
-            return;
-        }
-
-        // User-defined cycle settings (THIS IS WHAT YOU WERE MISSING)
-        if (prediction.status === "user_defined") {
-            container.innerHTML = `
-                <p>Next period:</p>
-                <p class="planning-highlight">${fmt(prediction.next_period)}</p>
-
-                <p>Predicted range:</p>
-                <p class="planning-highlight">
-                    ${fmt(prediction.range_start)} – ${fmt(prediction.range_end)}
-                </p>
-
-
-            `;
-            return;
-        }
-
-        // Multiple cycles (normal prediction)
-        if (prediction.status === "ok") {
-            container.innerHTML = `
-                <p>Next period:</p>
-                <p class="planning-highlight">${fmt(prediction.next_period)}</p>
-
-                <p>Expected range:</p>
-                <p class="planning-highlight">
-                    ${fmt(prediction.range_start)} – ${fmt(prediction.range_end)}
-                </p>
-
-                <p>Average cycle length: <span class="planning-highlight">${prediction.avg_cycle_length} days</span></p>
-                <p>Cycles tracked: <span class="planning-highlight">${prediction.cycle_count}</span></p>
-            `;
-            return;
-        }
-
-        // Fallback for any unexpected status
-        container.innerHTML = `<p>${prediction.message || "Unable to load prediction."}</p>`;
-    });
 });
 
 
@@ -383,14 +302,6 @@ function dismissSuggestion() {
 
     localStorage.setItem("dismissSuggestionDate", today);
     document.getElementById("suggestion-card").classList.add("hidden");
-}
-
-function acceptSuggestion() {
-    alert("Suggestion accepted.");
-}
-
-function modifySuggestion() {
-    alert("You can now modify this suggestion.");
 }
 
 
