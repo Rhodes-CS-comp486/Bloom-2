@@ -185,6 +185,28 @@ def migrate_db():
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_style VARCHAR(50) DEFAULT 'seedling'",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT TRUE",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT",
+        # Clean up duplicate garden_items rows (keep the earliest one per user+plant_type)
+        """
+        DELETE FROM garden_items a USING garden_items b
+        WHERE a.id > b.id
+          AND a.user_id = b.user_id
+          AND a.plant_type = b.plant_type
+        """,
+        # Add the unique constraint that ON CONFLICT (user_id, plant_type) needs.
+        # Wrapped in DO block so re-running doesn't error if it already exists.
+        """
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint
+                WHERE conname = 'garden_items_user_plant_unique'
+            ) THEN
+                ALTER TABLE garden_items
+                ADD CONSTRAINT garden_items_user_plant_unique
+                UNIQUE (user_id, plant_type);
+            END IF;
+        END$$;
+        """,
     ]
     for sql in migrations:
         try:
@@ -291,34 +313,37 @@ def calculate_garden_score(user_id):
     return int(periods_count * 10 + habit_count * 2 + checkin_count * 3)
 
 def update_garden(user_id):
+    """
+    Ensure the user has exactly one row per unlocked plant type, and update
+    each plant's growth stage based on how far the user is past *that plant's*
+    threshold (so newly-unlocked plants start at stage 1, not stage 5).
+    """
     score = calculate_garden_score(user_id)
     conn = get_db()
     cur = conn.cursor()
 
     plant_thresholds = [
-        (0,   'seedling',    1, 20, 55),
-        (10,  'daisy',       1, 35, 70),
-        (25,  'rose',        1, 60, 65),
-        (50,  'sunflower',   1, 75, 50),
-        (100, 'lavender',    1, 45, 40),
-        (150, 'cherry_blossom', 1, 25, 35),
-        (200, 'lotus',       1, 65, 30),
+        # (threshold, plant_type, position_x, position_y)
+        (0,   'seedling',       20, 55),
+        (10,  'daisy',          35, 70),
+        (25,  'rose',           60, 65),
+        (50,  'sunflower',      75, 50),
+        (100, 'lavender',       45, 40),
+        (150, 'cherry_blossom', 25, 35),
+        (200, 'lotus',          65, 30),
     ]
 
-    for threshold, plant_type, stage, px, py in plant_thresholds:
+    for threshold, plant_type, px, py in plant_thresholds:
         if score >= threshold:
+            points_past = score - threshold
+            plant_stage = min(5, max(1, points_past // 20 + 1))
             cur.execute("""
-                INSERT INTO garden_items (user_id, plant_type, growth_stage, position_x, position_y)
+                INSERT INTO garden_items
+                    (user_id, plant_type, growth_stage, position_x, position_y)
                 VALUES (%s, %s, %s, %s, %s)
-                ON CONFLICT DO NOTHING
-            """, (user_id, plant_type, stage, px, py))
-
-    # Update growth stages based on score
-    stage = min(5, max(1, score // 20 + 1))
-    cur.execute("""
-        UPDATE garden_items SET growth_stage = LEAST(5, %s)
-        WHERE user_id = %s
-    """, (stage, user_id))
+                ON CONFLICT (user_id, plant_type)
+                DO UPDATE SET growth_stage = LEAST(5, EXCLUDED.growth_stage)
+            """, (user_id, plant_type, plant_stage, px, py))
 
     conn.commit()
     cur.close()
@@ -433,6 +458,7 @@ def register():
                 cur2.execute("""
                     INSERT INTO garden_items (user_id, plant_type, growth_stage, position_x, position_y)
                     VALUES (%s, 'seedling', 1, 20, 55)
+                    ON CONFLICT (user_id, plant_type) DO NOTHING
                 """, (new_user['id'],))
                 # Seed default habits
                 default_habits = [
@@ -778,9 +804,35 @@ def toggle_habit():
         cur.execute("INSERT INTO habit_logs (habit_id, user_id, log_date, completed) VALUES (%s,%s,%s,%s)",
                     (habit_id, session['user_id'], log_date, True))
     conn.commit()
+
+    # Return fresh counts so the UI doesn't have to guess.
+    # week_count: completions for this habit in the last 7 days (today inclusive)
+    cur.execute("""
+        SELECT COUNT(*) as cnt FROM habit_logs
+        WHERE habit_id=%s AND log_date >= %s AND completed=TRUE
+    """, (habit_id, date.today() - timedelta(days=6)))
+    week_count = cur.fetchone()['cnt']
+
+    # today_done / today_total: across all the user's active habits today
+    cur.execute("SELECT COUNT(*) as cnt FROM habits WHERE user_id=%s AND active=TRUE",
+                (session['user_id'],))
+    today_total = cur.fetchone()['cnt']
+    cur.execute("""
+        SELECT COUNT(*) as cnt FROM habit_logs hl
+        JOIN habits h ON h.id = hl.habit_id
+        WHERE hl.user_id=%s AND hl.log_date=%s AND hl.completed=TRUE
+          AND h.active=TRUE
+    """, (session['user_id'], date.today()))
+    today_done = cur.fetchone()['cnt']
+
     cur.close(); conn.close()
     update_garden(session['user_id'])
-    return jsonify({'completed': new_state})
+    return jsonify({
+        'completed': new_state,
+        'week_count': week_count,
+        'today_done': today_done,
+        'today_total': today_total,
+    })
 
 @app.route('/habits/add', methods=['POST'])
 @login_required

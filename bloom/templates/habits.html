@@ -14,16 +14,20 @@
   {% set completed_today = habit_status.values() | list | select | list | length %}
   <div class="habits-progress-card">
     <div class="hp-left">
-      <span class="hp-num">{{ completed_today }}/{{ active_habits | length }}</span>
+      <span class="hp-num">
+        <span id="hp-done">{{ completed_today }}</span>/<span id="hp-total">{{ active_habits | length }}</span>
+      </span>
       <span class="hp-label">habits done today</span>
     </div>
     <div class="hp-bar-wrap">
       <div class="hp-bar">
-        <div class="hp-fill" style="width: {{ (completed_today / active_habits|length * 100) | int if active_habits else 0 }}%"></div>
+        <div class="hp-fill" id="hp-fill"
+             style="width: {{ (completed_today / active_habits|length * 100) | int if active_habits else 0 }}%"></div>
       </div>
-      {% if active_habits and completed_today == active_habits | length %}
-        <span class="hp-complete">✿ All done! Amazing!</span>
-      {% endif %}
+      <span class="hp-complete" id="hp-complete"
+            style="display: {% if active_habits and completed_today == active_habits | length %}inline{% else %}none{% endif %};">
+        ✿ All done! Amazing!
+      </span>
     </div>
   </div>
   {% endif %}
@@ -80,7 +84,7 @@
           {% endfor %}
         </div>
         <div class="hcard-actions">
-          <span class="week-stat">{{ week_stats.get(habit.id, 0) }}/7 this week</span>
+          <span class="week-stat" id="week-stat-{{ habit.id }}">{{ week_stats.get(habit.id, 0) }}/7 this week</span>
           {% if is_paused %}
             <button class="habit-toggle-btn paused-toggle" disabled>⏸ Paused</button>
           {% else %}
@@ -197,6 +201,10 @@
   cursor: not-allowed !important;
 }
 
+.hp-fill {
+  transition: width 0.4s ease;
+}
+
 .suggestion-banner {
   display: flex;
   align-items: flex-start;
@@ -245,21 +253,60 @@
 <script>
 async function toggleHabit(habitId, btn) {
   const today = '{{ today }}';
-  const res = await fetch('/habits/toggle', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({habit_id: habitId, date: today})
-  });
-  const data = await res.json();
-  const card = document.getElementById('hcard-' + habitId);
-  if (data.completed) {
-    btn.classList.add('toggled');
-    btn.textContent = '✓ Done';
-    card.classList.add('habit-done');
-  } else {
-    btn.classList.remove('toggled');
-    btn.textContent = 'Mark Done';
-    card.classList.remove('habit-done');
+
+  // Disable while in flight to prevent double-click race
+  btn.disabled = true;
+
+  try {
+    const res = await fetch('/habits/toggle', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({habit_id: habitId, date: today})
+    });
+    const data = await res.json();
+    if (data.error) return;
+
+    // 1. Update the card / button visual state
+    const card = document.getElementById('hcard-' + habitId);
+    if (data.completed) {
+      btn.classList.add('toggled');
+      btn.textContent = '✓ Done';
+      card.classList.add('habit-done');
+    } else {
+      btn.classList.remove('toggled');
+      btn.textContent = 'Mark Done';
+      card.classList.remove('habit-done');
+    }
+
+    // 2. Update this habit's "X/7 this week" stat
+    const weekEl = document.getElementById('week-stat-' + habitId);
+    if (weekEl && typeof data.week_count === 'number') {
+      weekEl.textContent = data.week_count + '/7 this week';
+    }
+
+    // 3. Update the daily progress card (number, bar, "all done" message)
+    if (typeof data.today_done === 'number' && typeof data.today_total === 'number') {
+      const doneEl  = document.getElementById('hp-done');
+      const totalEl = document.getElementById('hp-total');
+      const fillEl  = document.getElementById('hp-fill');
+      const completeEl = document.getElementById('hp-complete');
+
+      if (doneEl)  doneEl.textContent  = data.today_done;
+      if (totalEl) totalEl.textContent = data.today_total;
+      if (fillEl) {
+        const pct = data.today_total > 0
+          ? Math.round((data.today_done / data.today_total) * 100)
+          : 0;
+        fillEl.style.width = pct + '%';
+      }
+      if (completeEl) {
+        completeEl.style.display =
+          (data.today_total > 0 && data.today_done === data.today_total)
+            ? 'inline' : 'none';
+      }
+    }
+  } finally {
+    btn.disabled = false;
   }
 }
 
