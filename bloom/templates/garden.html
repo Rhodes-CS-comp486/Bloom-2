@@ -31,13 +31,15 @@
 #gc { display:block; position:absolute; top:0; left:0; }
 
 .hud { position:absolute; top:0; left:0; right:0; bottom:0; pointer-events:none; z-index:10; }
-.hud-tl { position:absolute; top:12px; left:12px; display:flex; gap:6px; pointer-events:all; }
+.hud-tl { position:absolute; top:12px; left:12px; display:flex; gap:6px; pointer-events:all; flex-wrap:wrap; max-width:60%; }
+.hud-tr { position:absolute; top:12px; right:12px; display:flex; gap:6px; pointer-events:all; flex-wrap:wrap; justify-content:flex-end; }
 .hud-br { position:absolute; bottom:12px; right:12px; display:flex; flex-direction:column; gap:6px; pointer-events:all; }
 .hud-bl { position:absolute; bottom:12px; left:12px; pointer-events:none; }
 
 .hbtn { padding:5px 12px; background:rgba(255,255,255,0.88); border:1px solid rgba(200,170,130,0.5); border-radius:20px; font-size:0.73rem; cursor:pointer; font-family:'DM Sans',sans-serif; color:#5a3a20; font-weight:500; backdrop-filter:blur(12px); box-shadow:0 2px 10px rgba(0,0,0,0.1),inset 0 1px 0 rgba(255,255,255,0.9); transition:all 0.18s; }
 .hbtn:hover { background:white; transform:translateY(-1px); }
 .hbtn.on { background:linear-gradient(135deg,#e8785a,#c97060); color:white; border-color:#c97060; box-shadow:0 4px 14px rgba(201,112,96,0.4); }
+.hbtn-sm { padding:4px 9px; font-size:0.68rem; }
 .hzoom { width:38px; height:38px; background:rgba(255,255,255,0.9); border:1px solid rgba(200,170,130,0.5); border-radius:12px; font-size:1.2rem; cursor:pointer; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(12px); transition:all 0.15s; color:#5a3a20; font-weight:700; box-shadow:0 3px 10px rgba(0,0,0,0.1),inset 0 1px 0 rgba(255,255,255,0.9); }
 .hzoom:hover { background:white; transform:scale(1.08); }
 .hhint { padding:5px 12px; background:rgba(255,255,255,0.72); backdrop-filter:blur(10px); border-radius:20px; border:1px solid rgba(200,170,130,0.35); font-size:0.69rem; color:rgba(80,55,30,0.8); font-family:'DM Sans',sans-serif; font-style:italic; box-shadow:0 2px 8px rgba(0,0,0,0.06); }
@@ -110,16 +112,24 @@
     <canvas id="gc"></canvas>
     <div class="hud">
       <div class="hud-tl">
-        <button class="hbtn on" id="bDay"   onclick="setTOD('day')">☀️ Day</button>
+        <button class="hbtn on" id="bAuto" onclick="setTOD('auto')">⏱ Auto</button>
+        <button class="hbtn"    id="bDay"   onclick="setTOD('day')">☀️ Day</button>
         <button class="hbtn"    id="bDusk"  onclick="setTOD('dusk')">🌅 Dusk</button>
         <button class="hbtn"    id="bNight" onclick="setTOD('night')">🌙 Night</button>
+      </div>
+      <div class="hud-tr">
+        <button class="hbtn hbtn-sm on" id="bsSpring" onclick="setSeason('spring')">🌷 Spring</button>
+        <button class="hbtn hbtn-sm"    id="bsSummer" onclick="setSeason('summer')">☀ Summer</button>
+        <button class="hbtn hbtn-sm"    id="bsAutumn" onclick="setSeason('autumn')">🍂 Autumn</button>
+        <button class="hbtn hbtn-sm"    id="bsWinter" onclick="setSeason('winter')">❄ Winter</button>
+        <button class="hbtn hbtn-sm" id="bWeather" onclick="cycleWeather()" title="Cycle weather">☁ Clear</button>
       </div>
       <div class="hud-br">
         <button class="hzoom" onclick="doZoom(1.25)">+</button>
         <button class="hzoom" onclick="doZoom(0.8)">−</button>
         <button class="hzoom" onclick="doReset()" style="font-size:0.8rem">⌂</button>
       </div>
-      <div class="hud-bl"><div class="hhint">Drag to explore · Scroll to zoom · Click plants</div></div>
+      <div class="hud-bl"><div class="hhint">Drag · Zoom · Click plants & critters</div></div>
     </div>
     <div id="ptip">
       <button class="pclose" onclick="hideTip()">✕</button>
@@ -175,10 +185,8 @@ function resize() {
 }
 
 // ── Isometric helpers ─────────────────────────────────────────────────────────
-// Grid cell size
 const TILE_W = 110;
 const TILE_H = 56;
-// Isometric projection
 function isoProject(gx, gy, gz) {
   return {
     x: (gx - gy) * (TILE_W / 2),
@@ -187,12 +195,10 @@ function isoProject(gx, gy, gz) {
 }
 
 // ── Camera ────────────────────────────────────────────────────────────────────
-// Camera is offset from world origin to screen center
 let camOX = 0, camOY = 0, sc = 1;
 
 function doReset() {
   sc = 1;
-  // Center the garden grid
   const gridCx = (GRID_W / 2);
   const gridCy = (GRID_H / 2);
   const p = isoProject(gridCx, gridCy, 0);
@@ -202,7 +208,6 @@ function doReset() {
 
 function doZoom(f) {
   const ns = Math.min(3, Math.max(0.3, sc * f));
-  // Zoom toward screen center
   const cx = W / 2, cy = H / 2;
   camOX = cx - (cx - camOX) * (ns / sc);
   camOY = cy - (cy - camOY) * (ns / sc);
@@ -212,19 +217,12 @@ function doZoom(f) {
 // ── Grid ──────────────────────────────────────────────────────────────────────
 const GRID_W = 32, GRID_H = 26;
 
-// Place plants in a beautiful garden layout with spacing
 const plantGrid = {};
-// Garden bed positions - spread across the grid in clusters
 const gardenBeds = [
-  // Top row
   [3,3],[6,2],[9,3],[12,2],[15,3],[18,2],[21,3],[24,2],
-  // Second row
   [4,6],[7,5],[10,6],[13,5],[16,6],[19,5],[22,6],[25,5],
-  // Middle row
   [3,9],[6,8],[9,9],[12,8],[15,9],[18,8],[21,9],[24,8],
-  // Fourth row
   [4,12],[7,11],[10,12],[13,11],[16,12],[19,11],[22,12],[25,11],
-  // Bottom rows
   [3,15],[6,14],[9,15],[12,14],[15,15],[18,14],[21,15],[24,14],
   [4,18],[7,17],[10,18],[13,17],[16,18],[19,17],[22,18],[25,17],
   [3,21],[7,20],[11,21],[15,20],[19,21],[23,20],
@@ -234,8 +232,34 @@ PLANTS.forEach((pl,i) => {
   plantGrid[pos[0]+','+pos[1]] = {...pl, gx: pos[0], gy: pos[1]};
 });
 
+// ── Koi pond — fixed cluster of water tiles ───────────────────────────────────
+const POND_CX = 14, POND_CY = 16, POND_RX = 2.5, POND_RY = 1.6;
+const pondTiles = {};
+for (let gx=0; gx<GRID_W; gx++) {
+  for (let gy=0; gy<GRID_H; gy++) {
+    const dx = (gx - POND_CX) / POND_RX;
+    const dy = (gy - POND_CY) / POND_RY;
+    if (dx*dx + dy*dy < 1 && !plantGrid[gx+','+gy]) {
+      pondTiles[gx+','+gy] = true;
+    }
+  }
+}
+
+// ── Monuments — unlocked at score thresholds, placed at fixed cells ───────────
+const MONUMENTS = [
+  {threshold:60,  type:'lantern',  gx:28, gy:4,  label:'Stone Lantern',   desc:'Stands sentinel as you reach 60 points.'},
+  {threshold:120, type:'birdbath', gx:1,  gy:13, label:'Birdbath',        desc:'A small ritual at 120 points.'},
+  {threshold:200, type:'torii',    gx:28, gy:23, label:'Garden Gate',     desc:'A milestone of devotion. 200 points.'},
+];
+const monumentGrid = {};
+MONUMENTS.forEach(m => {
+  if (SCORE >= m.threshold) monumentGrid[m.gx+','+m.gy] = m;
+});
+
 // ── Time of day ───────────────────────────────────────────────────────────────
-let tod = 'day';
+let tod = 'auto';
+let resolvedTod = 'day'; // what auto resolves to right now
+
 const SKIES = {
   day:   {bg:['#1565c0','#2196f3','#64b5f6','#bbdefb','#e8f5fc'],
           tile:'#5aac44',tileDark:'#489034',tileLight:'#6abb54',tileSide:'#2a5818',
@@ -250,18 +274,109 @@ const SKIES = {
           ground:'#3e2723',groundLight:'#4e3733',groundDark:'#2e1713',
           sun:false,moon:true,stars:true},
 };
-function setTOD(t) {
-  tod = t;
-  ['Day','Dusk','Night'].forEach(n => document.getElementById('b'+n).classList.toggle('on',n.toLowerCase()===t));
+
+function resolveTod() {
+  if (tod !== 'auto') return tod;
+  const h = new Date().getHours();
+  if (h >= 6 && h < 17) return 'day';
+  if (h >= 17 && h < 20) return 'dusk';
+  return 'night';
 }
 
+function setTOD(t) {
+  tod = t;
+  ['Auto','Day','Dusk','Night'].forEach(n => {
+    const el = document.getElementById('b'+n);
+    if (el) el.classList.toggle('on', n.toLowerCase()===t);
+  });
+}
+
+// ── Seasons ───────────────────────────────────────────────────────────────────
+let season = 'spring';
+const SEASON_TINTS = {
+  spring: {tile:null,         leafTint:null,         skyOpacity:0,    overlay:null},
+  summer: {tile:'#4a9438',    leafTint:'#3a7028',    skyOpacity:0.07, overlay:'rgba(255,220,140,0.06)'},
+  autumn: {tile:'#a08838',    leafTint:'#a86028',    skyOpacity:0.12, overlay:'rgba(220,140,60,0.10)'},
+  winter: {tile:'#cad8d8',    leafTint:'#8aa8a8',    skyOpacity:0.20, overlay:'rgba(220,235,255,0.15)'},
+};
+function setSeason(s) {
+  season = s;
+  ['Spring','Summer','Autumn','Winter'].forEach(n => {
+    const el = document.getElementById('bs'+n);
+    if (el) el.classList.toggle('on', n.toLowerCase()===s);
+  });
+}
+
+// Apply seasonal tint on top of TOD palette for tiles
+function getTilePalette(T) {
+  const tint = SEASON_TINTS[season].tile;
+  if (!tint) return T;
+  // Blend TOD tile color toward seasonal tint
+  return {
+    ...T,
+    tile: blendHex(T.tile, tint, 0.55),
+    tileSide: blendHex(T.tileSide, tint, 0.45),
+  };
+}
+
+function blendHex(a, b, t) {
+  const pa = hexToRgb(a), pb = hexToRgb(b);
+  const r = Math.round(pa.r + (pb.r - pa.r) * t);
+  const g = Math.round(pa.g + (pb.g - pa.g) * t);
+  const bl= Math.round(pa.b + (pb.b - pa.b) * t);
+  return `rgb(${r},${g},${bl})`;
+}
+function hexToRgb(h) {
+  const m = h.replace('#','');
+  return {
+    r: parseInt(m.substring(0,2), 16),
+    g: parseInt(m.substring(2,4), 16),
+    b: parseInt(m.substring(4,6), 16),
+  };
+}
+
+// ── Weather ───────────────────────────────────────────────────────────────────
+const WEATHERS = ['clear','clouds','rain','snow'];
+const WEATHER_LABELS = {clear:'☀ Clear', clouds:'☁ Clouds', rain:'☂ Rain', snow:'❄ Snow'};
+let weather = 'clear';
+function cycleWeather() {
+  const i = WEATHERS.indexOf(weather);
+  weather = WEATHERS[(i+1) % WEATHERS.length];
+  document.getElementById('bWeather').textContent = WEATHER_LABELS[weather];
+}
+
+const clouds = Array.from({length: 6}, (_,i) => ({
+  x: Math.random()*1.4 - 0.2,
+  y: 0.05 + Math.random()*0.25,
+  scale: 0.7 + Math.random()*0.8,
+  speed: 0.00018 + Math.random()*0.00028,
+}));
+
+const raindrops = Array.from({length: 220}, () => ({
+  x: Math.random(),
+  y: Math.random(),
+  speed: 0.012 + Math.random()*0.012,
+  len: 8 + Math.random()*12,
+}));
+
+const snowflakes = Array.from({length: 140}, () => ({
+  x: Math.random(),
+  y: Math.random(),
+  speed: 0.0014 + Math.random()*0.0024,
+  drift: (Math.random()-0.5)*0.0008,
+  r: 1.5 + Math.random()*2.2,
+  rot: Math.random()*Math.PI*2,
+  spin: (Math.random()-0.5)*0.03,
+}));
+
+const ripples = []; // pond ripples from rain
+
 // ── Decorations ───────────────────────────────────────────────────────────────
-// Random flowers & mushrooms on empty tiles
 const decorations = {};
 for (let gx=0; gx<GRID_W; gx++) {
   for (let gy=0; gy<GRID_H; gy++) {
     const k = gx+','+gy;
-    if (!plantGrid[k]) {
+    if (!plantGrid[k] && !pondTiles[k] && !monumentGrid[k]) {
       const r = Math.random();
       if (r < 0.04) decorations[k] = {type:'flower', color:['#fce7ef','#fef9c3','#e8d5f8','#d5f0e8'][Math.floor(Math.random()*4)]};
       else if (r < 0.055) decorations[k] = {type:'stone'};
@@ -271,7 +386,7 @@ for (let gx=0; gx<GRID_W; gx++) {
   }
 }
 
-// ── Particles ─────────────────────────────────────────────────────────────────
+// ── Particles (pollen / floating motes) ───────────────────────────────────────
 const ptcls = Array.from({length:35}, (_,i) => ({
   gx: Math.random()*GRID_W, gy: Math.random()*GRID_H, gz: Math.random()*3+0.5,
   vgx:(Math.random()-0.5)*0.005, vgy:(Math.random()-0.5)*0.005, vgz:0.01+Math.random()*0.015,
@@ -292,10 +407,89 @@ function tickPtcls(t) {
   }
 }
 
+// ── Falling leaves (autumn / cherry-blossom petals) ───────────────────────────
+const fallingLeaves = Array.from({length: 18}, () => ({
+  gx: Math.random()*GRID_W, gy: -1 - Math.random()*4, gz: 5 + Math.random()*2,
+  vgx: 0.01 + Math.random()*0.01, vgy: 0.01 + Math.random()*0.01,
+  vgz: -0.012 - Math.random()*0.008,
+  rot: Math.random()*Math.PI*2, spin: (Math.random()-0.5)*0.05,
+  size: 3 + Math.random()*2.5,
+  hue: Math.floor(Math.random()*4),
+}));
+
 // Stars
 const stars = Array.from({length:180}, () => ({
   sx: Math.random(), sy: Math.random()*0.6, r: Math.random()*1.8+0.3, tw: Math.random()*Math.PI*2
 }));
+
+// ── Pet companion: a wandering rabbit ─────────────────────────────────────────
+const pet = {
+  gx: 13, gy: 9,
+  tgx: 13, tgy: 9,
+  hopT: 0,
+  pauseT: 60,
+  facing: 1, // 1 = right, -1 = left
+};
+
+function tickPet(t) {
+  if (pet.pauseT > 0) {
+    pet.pauseT--;
+    return;
+  }
+  // Pick a new target if close enough
+  const dx = pet.tgx - pet.gx, dy = pet.tgy - pet.gy;
+  const d = Math.hypot(dx, dy);
+  if (d < 0.08) {
+    // Reached target — pause and choose a new one
+    pet.pauseT = 60 + Math.floor(Math.random()*120);
+    let nx, ny, tries = 0;
+    do {
+      nx = 1 + Math.floor(Math.random() * (GRID_W - 2));
+      ny = 1 + Math.floor(Math.random() * (GRID_H - 2));
+      tries++;
+    } while ((plantGrid[nx+','+ny] || pondTiles[nx+','+ny] || monumentGrid[nx+','+ny]) && tries < 12);
+    pet.tgx = nx; pet.tgy = ny;
+    return;
+  }
+  const speed = 0.025;
+  pet.gx += (dx / d) * speed;
+  pet.gy += (dy / d) * speed;
+  pet.facing = dx >= 0 ? 1 : -1;
+  pet.hopT += 1;
+}
+
+// ── Koi (swim in slow circles within the pond) ────────────────────────────────
+const kois = [
+  {phase: 0,            radius: 1.4, speed: 0.006, color: '#e8643a', size: 1.0},
+  {phase: Math.PI,      radius: 1.0, speed: 0.008, color: '#f9c46b', size: 0.85},
+  {phase: Math.PI*0.5,  radius: 1.7, speed: 0.005, color: '#fff1d6', size: 0.9},
+];
+
+// ── Click sparkles ─────────────────────────────────────────────────────────────
+const sparkles = [];
+function spawnSparklesAtPlant(pl) {
+  const center = isoProject(pl.gx, pl.gy, 0);
+  const colors = ['#fde68a', '#fce7ef', '#fff1f5', '#dcfce7'];
+  for (let i = 0; i < 14; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const v = 1.5 + Math.random() * 2.5;
+    sparkles.push({
+      x: center.x, y: center.y - 12 - pl.stage * 4,
+      vx: Math.cos(a) * v,
+      vy: Math.sin(a) * v - 1.2,
+      life: 1.0,
+      size: 1.5 + Math.random() * 2,
+      color: colors[Math.floor(Math.random() * colors.length)],
+    });
+  }
+}
+function tickSparkles() {
+  for (let i = sparkles.length - 1; i >= 0; i--) {
+    const s = sparkles[i];
+    s.x += s.vx; s.y += s.vy; s.vy += 0.08; s.life -= 0.025;
+    if (s.life <= 0) sparkles.splice(i, 1);
+  }
+}
 
 // ── Main draw ─────────────────────────────────────────────────────────────────
 let tick = 0;
@@ -304,18 +498,27 @@ let raf;
 function draw() {
   tick++;
   tickPtcls(tick);
-  const T = SKIES[tod];
+  tickPet(tick);
+  tickSparkles();
+
+  resolvedTod = resolveTod();
+  const T0 = SKIES[resolvedTod];
+  const T  = getTilePalette(T0);
 
   ctx.clearRect(0, 0, W, H);
 
-  // ── Sky background (always fills whole canvas)
+  // ── Sky background
   const bg = ctx.createLinearGradient(0,0,0,H);
-  const skc = T.bg;
+  const skc = T0.bg;
   skc.forEach((c,i) => bg.addColorStop(i/Math.max(1,skc.length-1), c));
   ctx.fillStyle = bg; ctx.fillRect(0,0,W,H);
 
+  // Seasonal sky overlay (winter haze, autumn warmth)
+  const sov = SEASON_TINTS[season].overlay;
+  if (sov) { ctx.fillStyle = sov; ctx.fillRect(0,0,W,H); }
+
   // Stars
-  if (T.stars) {
+  if (T0.stars) {
     for (const s of stars) {
       const tw = (Math.sin(tick*0.04+s.tw)+1)/2;
       ctx.beginPath(); ctx.arc(s.sx*W, s.sy*H, s.r, 0, Math.PI*2);
@@ -323,49 +526,73 @@ function draw() {
     }
   }
 
-  // Sun / Moon (fixed on screen, not in world)
-  if (T.sun) drawSun();
-  if (T.moon) drawMoon();
+  // Sun / Moon (fixed on screen)
+  if (T0.sun) drawSun();
+  if (T0.moon) drawMoon();
+
+  // Clouds (drift across sky behind world). Always present in 'clouds' & 'rain'.
+  if (weather === 'clouds' || weather === 'rain') drawClouds();
 
   // ── World transform
   ctx.save();
   ctx.translate(camOX, camOY);
   ctx.scale(sc, sc);
 
-  // Sort tiles back-to-front for correct isometric rendering
-  const drawOrder = [];
+  // Tiles
   for (let gy=0; gy<GRID_H; gy++) {
     for (let gx=0; gx<GRID_W; gx++) {
-      drawOrder.push({gx, gy});
+      drawTile(gx, gy, T);
     }
   }
 
-  // Draw tiles
-  for (const {gx, gy} of drawOrder) {
-    drawTile(gx, gy, T);
-  }
+  // Koi (drawn over pond, under particles)
+  drawKois();
 
-  // Draw particles
+  // Particles
   for (const p of ptcls) {
     const pp = isoProject(p.gx, p.gy, p.gz);
     ctx.save();
     ctx.translate(pp.x, pp.y);
     ctx.rotate(p.rot);
-    ctx.globalAlpha = p.alpha * (tod==='night'?0.35:0.65);
+    ctx.globalAlpha = p.alpha * (resolvedTod==='night'?0.35:0.65);
     ctx.beginPath(); ctx.ellipse(0,0,p.r,p.r*0.5,0,0,Math.PI*2);
     ctx.fillStyle = p.col; ctx.fill();
     ctx.restore();
   }
 
-  // Butterflies
-  if (SCORE>8)  drawButterfly3D(4.5, 2.5, tick,    '#fce7ef','#fda4c0');
-  if (SCORE>35) drawButterfly3D(10.5, 6.5, tick+80, '#ede9fe','#a78bfa');
-  if (SCORE>70) drawButterfly3D(7, 11, tick+160,    '#fef9c3','#fde047');
+  // Falling leaves / petals (autumn always; spring with cherry blossom score)
+  if (season === 'autumn' || (season === 'spring' && SCORE >= 150)) {
+    drawFallingLeaves();
+  }
+
+  // Butterflies (skip in winter / heavy rain — they hide)
+  const bugsOut = season !== 'winter' && weather !== 'rain';
+  if (bugsOut) {
+    if (SCORE>8)  drawButterfly3D(4.5, 2.5, tick,    '#fce7ef','#fda4c0');
+    if (SCORE>35) drawButterfly3D(10.5, 6.5, tick+80, '#ede9fe','#a78bfa');
+    if (SCORE>70) drawButterfly3D(7, 11, tick+160,    '#fef9c3','#fde047');
+  }
+
+  // Pet
+  drawPet();
+
+  // Sparkles (in world space because spawned from world coords)
+  for (const s of sparkles) {
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, s.life);
+    ctx.beginPath(); ctx.arc(s.x, s.y, s.size, 0, Math.PI*2);
+    ctx.fillStyle = s.color; ctx.fill();
+    ctx.restore();
+  }
 
   ctx.restore();
 
-  // Fireflies at night
-  if (tod==='night') {
+  // ── Weather overlays (screen space, drawn over the world)
+  if (weather === 'rain')  drawRain();
+  if (weather === 'snow')  drawSnow();
+
+  // Fireflies at night (kept from original — only when not raining)
+  if (resolvedTod==='night' && weather !== 'rain') {
     for (let i=0;i<20;i++) {
       const fx = (Math.sin(tick*0.009+i*2.3)*0.4+0.5)*W;
       const fy = (Math.cos(tick*0.012+i*1.8)*0.3+0.4)*H;
@@ -378,7 +605,15 @@ function draw() {
   }
 
   // Night/dusk overlay
-  if (tod==='night') { ctx.fillStyle='rgba(5,10,30,0.38)'; ctx.fillRect(0,0,W,H); }
+  if (resolvedTod==='night') { ctx.fillStyle='rgba(5,10,30,0.38)'; ctx.fillRect(0,0,W,H); }
+
+  // Winter frost vignette
+  if (season === 'winter') {
+    const vig = ctx.createRadialGradient(W/2, H/2, Math.min(W,H)*0.3, W/2, H/2, Math.max(W,H)*0.7);
+    vig.addColorStop(0, 'rgba(220,235,255,0)');
+    vig.addColorStop(1, 'rgba(180,210,235,0.18)');
+    ctx.fillStyle = vig; ctx.fillRect(0,0,W,H);
+  }
 
   raf = requestAnimationFrame(draw);
 }
@@ -388,10 +623,10 @@ function drawTile(gx, gy, T) {
   const p = isoProject(gx, gy, 0);
   const tw = TILE_W/2, th = TILE_H/2;
 
-  // Determine tile type
   const isPath = (gx % 4 === 0) || (gy % 4 === 0);
   const isBed  = plantGrid[gx+','+gy] !== undefined;
-  const isEdge = gx === 0 || gy === 0 || gx === GRID_W-1 || gy === GRID_H-1;
+  const isPond = pondTiles[gx+','+gy] !== undefined;
+  const isMon  = monumentGrid[gx+','+gy] !== undefined;
 
   // ── Top face
   ctx.beginPath();
@@ -401,17 +636,30 @@ function drawTile(gx, gy, T) {
   ctx.lineTo(p.x - tw, p.y);
   ctx.closePath();
 
-  if (isPath) {
-    // Stone/gravel path
-    const pathCol = tod==='night' ? '#4a3a28' : tod==='dusk' ? '#8a6848' : '#c8a878';
+  if (isPond) {
+    // Water tile - animated reflection
+    const waterCol = resolvedTod==='night' ? '#1a3a5a' :
+                     resolvedTod==='dusk'  ? '#5a4a7a' : '#4a90c4';
+    ctx.fillStyle = waterCol;
+    ctx.fill();
+    // Shimmer
+    const shimmer = ctx.createLinearGradient(p.x-tw, p.y, p.x+tw, p.y);
+    const sh = (Math.sin(tick*0.04+gx+gy)+1)/2;
+    shimmer.addColorStop(0, 'rgba(255,255,255,0)');
+    shimmer.addColorStop(sh, 'rgba(255,255,255,0.18)');
+    shimmer.addColorStop(Math.min(1, sh+0.15), 'rgba(255,255,255,0)');
+    shimmer.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = shimmer; ctx.fill();
+  } else if (isPath) {
+    let pathCol = resolvedTod==='night' ? '#4a3a28' : resolvedTod==='dusk' ? '#8a6848' : '#c8a878';
+    if (season === 'winter') pathCol = blendHex(pathCol, '#e8edf2', 0.5);
     ctx.fillStyle = pathCol;
     ctx.fill();
-    // Path texture - subtle spots
-    ctx.fillStyle = tod==='night'?'rgba(0,0,0,0.15)':'rgba(255,255,255,0.08)';
+    ctx.fillStyle = resolvedTod==='night'?'rgba(0,0,0,0.15)':'rgba(255,255,255,0.08)';
     ctx.fill();
   } else if (isBed) {
-    // Raised garden bed - darker richer soil
-    const bedCol = tod==='night' ? '#2a1a10' : tod==='dusk' ? '#5a3820' : '#7a4a28';
+    let bedCol = resolvedTod==='night' ? '#2a1a10' : resolvedTod==='dusk' ? '#5a3820' : '#7a4a28';
+    if (season === 'winter') bedCol = blendHex(bedCol, '#5e6a72', 0.4);
     ctx.fillStyle = bedCol;
     ctx.fill();
     const bedHL = ctx.createLinearGradient(p.x,p.y-th,p.x,p.y+th);
@@ -419,7 +667,6 @@ function drawTile(gx, gy, T) {
     bedHL.addColorStop(1,'rgba(0,0,0,0.08)');
     ctx.fillStyle = bedHL; ctx.fill();
   } else {
-    // Lush grass
     ctx.fillStyle = T.tile;
     ctx.fill();
     const hlGrad = ctx.createLinearGradient(p.x,p.y-th,p.x,p.y+th);
@@ -428,13 +675,27 @@ function drawTile(gx, gy, T) {
     hlGrad.addColorStop(1,'rgba(0,0,0,0.06)');
     ctx.fillStyle = hlGrad; ctx.fill();
   }
+
+  // Snow cap on tiles in winter (not on water)
+  if (season === 'winter' && !isPond) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(p.x,      p.y - th);
+    ctx.lineTo(p.x + tw, p.y);
+    ctx.lineTo(p.x,      p.y + th);
+    ctx.lineTo(p.x - tw, p.y);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(245,250,255,0.55)';
+    ctx.fill();
+    ctx.restore();
+  }
+
   ctx.strokeStyle = isPath ? 'rgba(0,0,0,0.06)' : 'rgba(0,0,0,0.03)';
   ctx.lineWidth = 0.4; ctx.stroke();
 
-  // ── Tile depth sides (only visible on edges)
+  // Tile depth sides
   const depth = 8;
   if (gy === GRID_H-1 || !isVisible(gx, gy+1)) {
-    // Front-left face
     ctx.beginPath();
     ctx.moveTo(p.x,      p.y + th);
     ctx.lineTo(p.x - tw, p.y);
@@ -444,7 +705,6 @@ function drawTile(gx, gy, T) {
     ctx.fillStyle = T.tileSide; ctx.fill();
   }
   if (gx === GRID_W-1 || !isVisible(gx+1, gy)) {
-    // Front-right face
     ctx.beginPath();
     ctx.moveTo(p.x,      p.y + th);
     ctx.lineTo(p.x + tw, p.y);
@@ -454,17 +714,29 @@ function drawTile(gx, gy, T) {
     ctx.fillStyle = T.groundDark; ctx.fill();
   }
 
-  // ── Decorations (not on paths or plant beds)
+  // Pond ripples
+  if (isPond && weather === 'rain') {
+    drawPondRipples(p.x, p.y, gx, gy);
+  }
+
+  // Decorations (skip in winter — they're "buried" / dormant)
   const k = gx+','+gy;
   const dec = decorations[k];
-  if (dec && !isPath && !isBed) {
+  if (dec && !isPath && !isBed && !isPond && !isMon && season !== 'winter') {
     if (dec.type==='flower') drawIsoFlower(p.x, p.y, dec.color, tick+gx*7+gy*13);
     else if (dec.type==='stone') drawIsoStone(p.x, p.y);
     else if (dec.type==='mushroom') drawIsoMushroom(p.x, p.y, tick);
     else if (dec.type==='grass') drawIsoGrass(p.x, p.y, tick+gx*5+gy*11);
+  } else if (dec && dec.type==='stone' && !isPath && !isBed && !isPond && !isMon) {
+    // Stones still visible in winter (just frosted)
+    drawIsoStone(p.x, p.y);
   }
 
-  // ── Plant
+  // Monument
+  const mon = monumentGrid[k];
+  if (mon) drawMonument(p.x, p.y, mon);
+
+  // Plant
   const pl = plantGrid[k];
   if (pl) drawIsoPlant(p.x, p.y, pl, tick);
 }
@@ -473,14 +745,227 @@ function isVisible(gx, gy) {
   return gx >= 0 && gx < GRID_W && gy >= 0 && gy < GRID_H;
 }
 
+// ── Pond ripples (subtle, based on tile position so they look distributed) ────
+function drawPondRipples(cx, cy, gx, gy) {
+  const phase = (tick * 0.04 + gx * 1.7 + gy * 2.3) % 6;
+  if (phase < 2) {
+    const r = phase * 12;
+    const a = (1 - phase / 2) * 0.4;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, r, r*0.5, 0, 0, Math.PI*2);
+    ctx.strokeStyle = `rgba(255,255,255,${a})`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+}
+
+// ── Koi ───────────────────────────────────────────────────────────────────────
+function drawKois() {
+  for (const k of kois) {
+    const t = tick * k.speed + k.phase;
+    const gx = POND_CX + Math.cos(t) * k.radius;
+    const gy = POND_CY + Math.sin(t) * k.radius * 0.55;
+    const p = isoProject(gx, gy, 0);
+    const heading = t + Math.PI/2;
+    ctx.save();
+    ctx.translate(p.x, p.y + 2);
+    // Body — flatten because we're seeing it from above on an iso tile
+    ctx.scale(1, 0.5);
+    ctx.rotate(heading);
+    // Tail wiggle
+    const wig = Math.sin(tick*0.18 + k.phase) * 0.4;
+    // Body
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 9*k.size, 4*k.size, 0, 0, Math.PI*2);
+    ctx.fillStyle = k.color;
+    ctx.globalAlpha = 0.85;
+    ctx.fill();
+    // Tail
+    ctx.beginPath();
+    ctx.moveTo(-9*k.size, 0);
+    ctx.quadraticCurveTo(-13*k.size, wig*5, -16*k.size, wig*3);
+    ctx.lineTo(-13*k.size, -wig*3);
+    ctx.fillStyle = k.color;
+    ctx.globalAlpha = 0.7;
+    ctx.fill();
+    // White spot
+    ctx.beginPath();
+    ctx.ellipse(2*k.size, -1*k.size, 2.5*k.size, 1.4*k.size, 0, 0, Math.PI*2);
+    ctx.fillStyle = '#fff8ee';
+    ctx.globalAlpha = 0.85;
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+// ── Monuments ─────────────────────────────────────────────────────────────────
+function drawMonument(cx, cy, mon) {
+  ctx.save();
+  ctx.translate(cx, cy);
+  if (resolvedTod==='night') ctx.globalAlpha = 0.85;
+
+  // Shadow
+  ctx.beginPath();
+  ctx.ellipse(0, 4, 18, 8, 0, 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(0,0,0,0.22)'; ctx.fill();
+  ctx.globalAlpha = resolvedTod==='night' ? 0.85 : 1;
+
+  if (mon.type === 'lantern') {
+    // Stone base
+    ctx.fillStyle = '#7a7068';
+    ctx.beginPath(); ctx.roundRect(-12, -8, 24, 12, 2); ctx.fill();
+    // Pillar
+    ctx.fillStyle = '#8a8078';
+    ctx.fillRect(-4, -32, 8, 24);
+    // Light box
+    ctx.fillStyle = '#9a9088';
+    ctx.beginPath(); ctx.roundRect(-10, -46, 20, 16, 3); ctx.fill();
+    // Glow window
+    const glowing = resolvedTod !== 'day';
+    ctx.fillStyle = glowing ? '#ffd66b' : '#5a5048';
+    ctx.fillRect(-6, -42, 12, 8);
+    if (glowing) {
+      ctx.shadowColor = '#ffd66b';
+      ctx.shadowBlur = 14;
+      ctx.fillStyle = 'rgba(255,214,107,0.4)';
+      ctx.beginPath(); ctx.arc(0, -38, 14, 0, Math.PI*2); ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+    // Roof
+    ctx.fillStyle = '#6a6058';
+    ctx.beginPath();
+    ctx.moveTo(-14, -46);
+    ctx.lineTo(0, -54);
+    ctx.lineTo(14, -46);
+    ctx.closePath();
+    ctx.fill();
+  }
+  else if (mon.type === 'birdbath') {
+    // Pedestal
+    ctx.fillStyle = '#a8a098';
+    ctx.beginPath(); ctx.roundRect(-6, -16, 12, 16, 2); ctx.fill();
+    // Bowl rim
+    ctx.fillStyle = '#b8b0a8';
+    ctx.beginPath(); ctx.ellipse(0, -18, 14, 5, 0, 0, Math.PI*2); ctx.fill();
+    // Water
+    ctx.fillStyle = resolvedTod==='night' ? '#3a5a7a' : '#7ab4d4';
+    ctx.beginPath(); ctx.ellipse(0, -19, 11, 3.5, 0, 0, Math.PI*2); ctx.fill();
+    // Shimmer
+    const sh = (Math.sin(tick*0.05)+1)/2;
+    ctx.fillStyle = `rgba(255,255,255,${0.2+sh*0.3})`;
+    ctx.beginPath(); ctx.ellipse(-3, -19.5, 4, 1, 0, 0, Math.PI*2); ctx.fill();
+    // Sometimes a small bird
+    if ((tick % 600) < 240) {
+      const bx = Math.sin(tick*0.04)*4;
+      ctx.fillStyle = '#5a5048';
+      ctx.beginPath(); ctx.ellipse(bx, -22, 3, 2.5, 0, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(bx+2, -24, 1.6, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#f59e0b';
+      ctx.beginPath(); ctx.moveTo(bx+3.5, -24); ctx.lineTo(bx+5, -23.5); ctx.lineTo(bx+3.5, -23); ctx.closePath(); ctx.fill();
+    }
+  }
+  else if (mon.type === 'torii') {
+    // Two pillars
+    ctx.fillStyle = '#c4452a';
+    ctx.fillRect(-18, -50, 5, 50);
+    ctx.fillRect(13, -50, 5, 50);
+    // Bottom crossbar
+    ctx.fillRect(-22, -36, 44, 4);
+    // Top beam
+    ctx.fillStyle = '#a83520';
+    ctx.beginPath();
+    ctx.moveTo(-26, -54);
+    ctx.lineTo(-22, -50);
+    ctx.lineTo(22, -50);
+    ctx.lineTo(26, -54);
+    ctx.lineTo(24, -56);
+    ctx.lineTo(-24, -56);
+    ctx.closePath();
+    ctx.fill();
+    // Center plaque
+    ctx.fillStyle = '#3a2818';
+    ctx.fillRect(-4, -48, 8, 8);
+    ctx.fillStyle = '#f8d870';
+    ctx.font = '7px serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('福', 0, -42);
+  }
+  ctx.restore();
+}
+
+// ── Pet rabbit ────────────────────────────────────────────────────────────────
+function drawPet() {
+  // Hop arc — pet sits at z=0 mostly, but lifts when moving
+  const moving = pet.pauseT === 0;
+  const hopZ = moving ? Math.abs(Math.sin(pet.hopT * 0.3)) * 0.4 : 0;
+  const p = isoProject(pet.gx, pet.gy, hopZ);
+  ctx.save();
+  ctx.translate(p.x, p.y);
+  if (resolvedTod==='night') ctx.globalAlpha = 0.85;
+
+  // Shadow
+  ctx.beginPath();
+  ctx.ellipse(0, 4, 10, 4, 0, 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.fill();
+
+  // Scale by facing
+  ctx.scale(pet.facing, 1);
+
+  // Body
+  const bodyCol = season === 'winter' ? '#fafafa' : '#d8c8b0';
+  ctx.fillStyle = bodyCol;
+  ctx.beginPath();
+  ctx.ellipse(0, -4, 9, 6, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  // Tail
+  ctx.beginPath();
+  ctx.arc(-7, -5, 3, 0, Math.PI*2);
+  ctx.fillStyle = '#fff';
+  ctx.fill();
+
+  // Head
+  ctx.fillStyle = bodyCol;
+  ctx.beginPath();
+  ctx.ellipse(7, -8, 5, 4.5, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  // Ears
+  ctx.fillStyle = bodyCol;
+  ctx.beginPath();
+  ctx.ellipse(6, -14, 1.8, 4.5, -0.2, 0, Math.PI*2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(9, -14, 1.8, 4.5, 0.1, 0, Math.PI*2);
+  ctx.fill();
+  // Inner ear
+  ctx.fillStyle = '#f0c8b0';
+  ctx.beginPath();
+  ctx.ellipse(6, -13, 0.8, 2.8, -0.2, 0, Math.PI*2);
+  ctx.fill();
+
+  // Eye
+  ctx.fillStyle = '#1a1208';
+  ctx.beginPath();
+  ctx.arc(8.5, -8.5, 0.9, 0, Math.PI*2);
+  ctx.fill();
+
+  // Nose
+  ctx.fillStyle = '#c97060';
+  ctx.beginPath();
+  ctx.arc(11.5, -7.5, 0.6, 0, Math.PI*2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
 // ── Decorative elements ───────────────────────────────────────────────────────
 function drawIsoFlower(cx, cy, color, t) {
   const sway = Math.sin(t*0.03)*1.5;
   ctx.save(); ctx.translate(cx+sway, cy-18);
-  // Stem
   ctx.strokeStyle='#4a8030'; ctx.lineWidth=1.5;
   ctx.beginPath(); ctx.moveTo(0,18); ctx.lineTo(0,0); ctx.stroke();
-  // Petals
   for (let p=0;p<5;p++) {
     const a=(p/5)*Math.PI*2;
     ctx.beginPath(); ctx.arc(Math.cos(a)*5,Math.sin(a)*5,4,0,Math.PI*2);
@@ -497,20 +982,21 @@ function drawIsoStone(cx, cy) {
   ctx.fillStyle='#b0a090'; ctx.fill();
   ctx.beginPath(); ctx.ellipse(-2,-2,9,5,0,0,Math.PI*2);
   ctx.fillStyle='#c8b8a8'; ctx.fill();
+  if (season === 'winter') {
+    ctx.beginPath(); ctx.ellipse(-2,-3,8,4,0,0,Math.PI*2);
+    ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.fill();
+  }
   ctx.restore();
 }
 
 function drawIsoMushroom(cx, cy, t) {
   ctx.save(); ctx.translate(cx, cy-10);
-  // Stem
   ctx.beginPath(); ctx.roundRect(-4,0,8,12,2);
   ctx.fillStyle='#e8e0d0'; ctx.fill();
-  // Cap
   ctx.beginPath(); ctx.ellipse(0,-2,14,9,0,0,Math.PI*2);
   ctx.fillStyle='#c0392b'; ctx.fill();
   ctx.beginPath(); ctx.ellipse(0,-2,14,9,0,0,Math.PI*2);
   ctx.strokeStyle='rgba(0,0,0,0.1)'; ctx.lineWidth=0.5; ctx.stroke();
-  // Dots
   [[-4,-4],[3,-2],[-1,-6]].forEach(([dx,dy]) => {
     ctx.beginPath(); ctx.arc(dx,dy,2.5,0,Math.PI*2);
     ctx.fillStyle='rgba(255,255,255,0.7)'; ctx.fill();
@@ -520,11 +1006,15 @@ function drawIsoMushroom(cx, cy, t) {
 
 function drawIsoGrass(cx, cy, t) {
   ctx.save(); ctx.translate(cx, cy-4);
+  // In autumn, tinge grass amber; in summer slightly darker green
+  let col = '#5a9040';
+  if (season === 'autumn') col = '#a87040';
+  else if (season === 'summer') col = '#4a7830';
   for (let i=0;i<4;i++) {
     const sw = Math.sin(t*0.025+i)*2;
     const bx = (i-1.5)*5;
     ctx.beginPath(); ctx.moveTo(bx,0); ctx.quadraticCurveTo(bx+sw,-10,bx+sw*0.6,-6);
-    ctx.strokeStyle='#5a9040'; ctx.lineWidth=1.8; ctx.lineCap='round'; ctx.stroke();
+    ctx.strokeStyle=col; ctx.lineWidth=1.8; ctx.lineCap='round'; ctx.stroke();
   }
   ctx.restore();
 }
@@ -544,21 +1034,24 @@ function drawIsoPlant(cx, cy, pl, t) {
   const s = pl.stage-1;
   const sway = Math.sin(t*0.02+cx*0.01)*1.2;
   ctx.save(); ctx.translate(cx+sway, cy);
-  if (tod==='night') ctx.globalAlpha=0.75;
+  if (resolvedTod==='night') ctx.globalAlpha=0.75;
 
-  // Shadow on tile
   ctx.beginPath(); ctx.ellipse(0,2, 10+pl.stage*3, 5+pl.stage, 0,0,Math.PI*2);
   ctx.fillStyle='rgba(0,0,0,0.18)'; ctx.fill();
-  ctx.globalAlpha = tod==='night'?0.75:1;
+  ctx.globalAlpha = resolvedTod==='night'?0.75:1;
 
   const h = [22,34,46,58,72][s];
-  const lc  = tod==='night'?'#1e5a28':'#3a8040';
-  const lc2 = tod==='night'?'#2a6a32':'#4a9050';
+  let lc  = resolvedTod==='night'?'#1e5a28':'#3a8040';
+  let lc2 = resolvedTod==='night'?'#2a6a32':'#4a9050';
+  // Seasonal leaf tint
+  const leafTint = SEASON_TINTS[season].leafTint;
+  if (leafTint) {
+    lc = blendHex(lc, leafTint, 0.55);
+    lc2 = blendHex(lc2, leafTint, 0.55);
+  }
 
   if (pl.type==='seedling') {
-    // Pot
     drawPot(0, 0, pl.stage);
-    // Stem
     ctx.strokeStyle='#6a8a48'; ctx.lineWidth=s+2; ctx.lineCap='round';
     ctx.beginPath(); ctx.moveTo(0,0); ctx.quadraticCurveTo(3,-h*0.45,0,-h); ctx.stroke();
     leaf(-10,-h*0.38,12,5,-0.7,lc);
@@ -585,7 +1078,7 @@ function drawIsoPlant(cx, cy, pl, t) {
         const a=(p/8)*Math.PI*2;
         ctx.save(); ctx.translate(Math.cos(a)*pr,-h+Math.sin(a)*pr); ctx.rotate(a);
         ctx.beginPath(); ctx.ellipse(0,0,pr+1,pr/2+1.5,0,0,Math.PI*2);
-        ctx.fillStyle='white'; ctx.globalAlpha=0.96; ctx.fill(); ctx.globalAlpha=tod==='night'?0.75:1;
+        ctx.fillStyle='white'; ctx.globalAlpha=0.96; ctx.fill(); ctx.globalAlpha=resolvedTod==='night'?0.75:1;
         ctx.strokeStyle='#e0e0e0'; ctx.lineWidth=0.4; ctx.stroke(); ctx.restore();
       }
       ctx.beginPath(); ctx.arc(0,-h,pr/2+2,0,Math.PI*2); ctx.fillStyle='#fde047'; ctx.fill();
@@ -603,7 +1096,7 @@ function drawIsoPlant(cx, cy, pl, t) {
       ctx.beginPath(); ctx.arc(0,-h,r,0,Math.PI*2); ctx.fillStyle=c; ctx.fill();
     });
     ctx.beginPath(); ctx.arc(-3,-h-4,br*0.55,0,Math.PI*2); ctx.fillStyle='#ef6060'; ctx.globalAlpha=0.55; ctx.fill();
-    ctx.globalAlpha=tod==='night'?0.75:1;
+    ctx.globalAlpha=resolvedTod==='night'?0.75:1;
     ctx.strokeStyle='#3a6828'; ctx.lineWidth=1.4;
     ctx.beginPath(); ctx.moveTo(-br-2,-h+4); ctx.quadraticCurveTo(0,-h+br+6,br+2,-h+4); ctx.stroke();
   }
@@ -644,7 +1137,6 @@ function drawIsoPlant(cx, cy, pl, t) {
     }
   }
   else if (pl.type==='cherry_blossom') {
-    // Tree - no pot, grows from ground
     const th=[50,74,100,126,156][s], br=10+pl.stage*2;
     ctx.save(); ctx.lineCap='round';
     ctx.strokeStyle='#6a4028'; ctx.lineWidth=s+5;
@@ -670,11 +1162,11 @@ function drawIsoPlant(cx, cy, pl, t) {
       for(let p=0;p<5;p++) {
         const a=(p/5)*Math.PI*2;
         ctx.beginPath(); ctx.arc(bx+Math.cos(a)*br,by+Math.sin(a)*br,pl.stage+2.5,0,Math.PI*2);
-        ctx.fillStyle='#fce7ef'; ctx.globalAlpha=0.9; ctx.fill(); ctx.globalAlpha=tod==='night'?0.75:1;
+        ctx.fillStyle='#fce7ef'; ctx.globalAlpha=0.9; ctx.fill(); ctx.globalAlpha=resolvedTod==='night'?0.75:1;
       }
       ctx.beginPath(); ctx.arc(bx,by,pl.stage+1.5,0,Math.PI*2); ctx.fillStyle='#fff1f5'; ctx.fill();
       ctx.beginPath(); ctx.arc(bx,by,pl.stage,0,Math.PI*2); ctx.fillStyle='#fde68a'; ctx.globalAlpha=0.7; ctx.fill();
-      ctx.globalAlpha=tod==='night'?0.75:1;
+      ctx.globalAlpha=resolvedTod==='night'?0.75:1;
     });
     if(s>=2) {
       [[-24,10],[16,14],[-8,8],[28,12]].forEach(([fx,fy])=>{
@@ -685,7 +1177,6 @@ function drawIsoPlant(cx, cy, pl, t) {
     }
   }
   else if (pl.type==='lotus') {
-    // Water feature
     const lr=[9,12,16,21,27][s], lty=-45-pl.stage*16;
     [[28+pl.stage*5,12+pl.stage,'rgba(80,170,220,0.45)'],[20+pl.stage*4,8+pl.stage,'rgba(120,200,240,0.32)']].forEach(([rx,ry,c])=>{
       ctx.beginPath(); ctx.ellipse(0,3,rx,ry,0,0,Math.PI*2); ctx.fillStyle=c; ctx.fill();
@@ -709,7 +1200,7 @@ function drawIsoPlant(cx, cy, pl, t) {
       ctx.fillStyle='#fecdd3'; ctx.globalAlpha=0.93; ctx.fill();
       ctx.strokeStyle='#fda4c0'; ctx.lineWidth=0.6; ctx.stroke(); ctx.restore();
     }
-    ctx.globalAlpha=tod==='night'?0.75:1;
+    ctx.globalAlpha=resolvedTod==='night'?0.75:1;
     [[lr,'#fde68a'],[lr*0.55,'#f59e0b'],[lr*0.28,'#d97706']].forEach(([r,c])=>{
       ctx.beginPath(); ctx.arc(0,lty,r,0,Math.PI*2); ctx.fillStyle=c; ctx.fill();
     });
@@ -721,12 +1212,10 @@ function drawIsoPlant(cx, cy, pl, t) {
 function drawPot(x, y, stage) {
   const pw = 10+stage*2, ph = 8+stage;
   ctx.save(); ctx.translate(x,y);
-  // Pot body
   ctx.beginPath();
   ctx.moveTo(-pw, 0); ctx.lineTo(-pw+4, ph); ctx.lineTo(pw-4, ph); ctx.lineTo(pw, 0); ctx.closePath();
   ctx.fillStyle='#c87840'; ctx.fill();
   ctx.strokeStyle='#a05820'; ctx.lineWidth=0.8; ctx.stroke();
-  // Pot rim
   ctx.beginPath(); ctx.ellipse(0,0,pw,pw*0.35,0,0,Math.PI*2);
   ctx.fillStyle='#d88850'; ctx.fill();
   ctx.strokeStyle='#a05820'; ctx.lineWidth=0.8; ctx.stroke();
@@ -750,10 +1239,10 @@ function thorn(x,y) {
   ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x+(x>0?8:-8),y+7); ctx.stroke(); ctx.restore();
 }
 
-// ── Sun & Moon (screen-space) ─────────────────────────────────────────────────
+// ── Sun & Moon ────────────────────────────────────────────────────────────────
 function drawSun() {
-  const sx = W*0.85, sy = tod==='dusk'?H*0.72:H*0.14;
-  const isDusk = tod==='dusk';
+  const sx = W*0.85, sy = resolvedTod==='dusk'?H*0.72:H*0.14;
+  const isDusk = resolvedTod==='dusk';
   const gl=ctx.createRadialGradient(sx,sy,0,sx,sy,100);
   gl.addColorStop(0,isDusk?'rgba(255,120,50,0.5)':'rgba(255,245,150,0.55)');
   gl.addColorStop(1,'rgba(255,200,100,0)');
@@ -783,7 +1272,6 @@ function drawMoon() {
 
 // ── Butterfly ─────────────────────────────────────────────────────────────────
 function drawButterfly3D(gx, gy, t, c1, c2) {
-  const base = isoProject(gx, gy, 0);
   const floatZ = Math.sin(t*0.04)*0.8+1.5;
   const bp = isoProject(gx+Math.sin(t*0.012)*0.3, gy+Math.cos(t*0.009)*0.3, floatZ);
   const flap = Math.abs(Math.sin(t*0.13))*0.85+0.15;
@@ -802,6 +1290,96 @@ function drawButterfly3D(gx, gy, t, c1, c2) {
   ctx.beginPath(); ctx.moveTo(-1,-7); ctx.quadraticCurveTo(-7,-16,-10,-12); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(1,-7); ctx.quadraticCurveTo(7,-16,10,-12); ctx.stroke();
   ctx.restore();
+}
+
+// ── Clouds (screen-space, drift slowly) ───────────────────────────────────────
+function drawClouds() {
+  for (const c of clouds) {
+    c.x += c.speed * (weather === 'rain' ? 1.4 : 1);
+    if (c.x > 1.3) c.x = -0.3;
+    const cx = c.x * W;
+    const cy = c.y * H;
+    const dark = weather === 'rain';
+    const baseCol = dark ? 'rgba(80,90,110,0.7)' : 'rgba(255,255,255,0.85)';
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(c.scale, c.scale);
+    ctx.fillStyle = baseCol;
+    [[-25,0,18],[-8,-6,22],[8,-4,20],[24,2,16],[0,6,18]].forEach(([dx,dy,r])=>{
+      ctx.beginPath(); ctx.arc(dx,dy,r,0,Math.PI*2); ctx.fill();
+    });
+    ctx.restore();
+  }
+}
+
+// ── Rain ──────────────────────────────────────────────────────────────────────
+function drawRain() {
+  ctx.save();
+  ctx.strokeStyle = 'rgba(180,210,235,0.55)';
+  ctx.lineWidth = 1.2;
+  for (const d of raindrops) {
+    d.y += d.speed;
+    d.x += d.speed * 0.25; // wind
+    if (d.y > 1.05) { d.y = -0.05; d.x = Math.random(); }
+    if (d.x > 1.05) d.x = 0;
+    const sx = d.x * W;
+    const sy = d.y * H;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(sx - d.len*0.3, sy + d.len);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// ── Snow ──────────────────────────────────────────────────────────────────────
+function drawSnow() {
+  for (const s of snowflakes) {
+    s.y += s.speed;
+    s.x += s.drift + Math.sin(tick*0.01 + s.y*10) * 0.0003;
+    s.rot += s.spin;
+    if (s.y > 1.05) { s.y = -0.05; s.x = Math.random(); }
+    if (s.x > 1.05) s.x = 0;
+    if (s.x < -0.05) s.x = 1;
+    const sx = s.x * W;
+    const sy = s.y * H;
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(s.rot);
+    ctx.fillStyle = 'rgba(245,250,255,0.85)';
+    ctx.beginPath();
+    ctx.arc(0, 0, s.r, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+// ── Falling leaves ────────────────────────────────────────────────────────────
+function drawFallingLeaves() {
+  const palettes = season === 'spring'
+    ? ['#fce7ef','#fda4c0','#fff1f5','#fbcfe8']  // cherry blossoms
+    : ['#c97030','#e8884a','#a04020','#d4a050']; // autumn leaves
+  for (const lf of fallingLeaves) {
+    lf.gx += lf.vgx;
+    lf.gy += lf.vgy;
+    lf.gz += lf.vgz;
+    lf.rot += lf.spin;
+    if (lf.gz < -0.2 || lf.gx > GRID_W || lf.gy > GRID_H) {
+      lf.gx = Math.random() * GRID_W;
+      lf.gy = -1;
+      lf.gz = 5 + Math.random()*2;
+    }
+    const p = isoProject(lf.gx, lf.gy, lf.gz);
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(lf.rot);
+    ctx.fillStyle = palettes[lf.hue % palettes.length];
+    ctx.globalAlpha = 0.85;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, lf.size+1, lf.size*0.5, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  }
 }
 
 // ── Interaction ───────────────────────────────────────────────────────────────
@@ -851,18 +1429,41 @@ wrap.addEventListener('touchend', () => {
 function handleClick(e) {
   const r=wrap.getBoundingClientRect();
   const sx=(e.clientX-r.left-camOX)/sc, sy=(e.clientY-r.top-camOY)/sc;
-  // Reverse iso: find which tile was clicked
-  // x = (gx-gy)*(TW/2)  y = (gx+gy)*(TH/2)
   const TW=TILE_W/2, TH=TILE_H/2;
   const gx_f = (sx/TW + sy/TH)/2;
   const gy_f = (sy/TH - sx/TW)/2;
-  // Check nearest plants
+
+  // Pet hit?
+  if (Math.abs(pet.gx - gx_f) + Math.abs(pet.gy - gy_f) < 1.2) {
+    // Spook the pet a little
+    pet.pauseT = 0;
+    pet.tgx = Math.max(1, Math.min(GRID_W-2, pet.gx + (Math.random()*6-3)));
+    pet.tgy = Math.max(1, Math.min(GRID_H-2, pet.gy + (Math.random()*6-3)));
+    return;
+  }
+
+  // Monument hit?
+  let bestMon = null, bestMonD = 99;
+  for (const m of MONUMENTS) {
+    if (SCORE < m.threshold) continue;
+    const d = Math.abs(m.gx - gx_f) + Math.abs(m.gy - gy_f);
+    if (d < bestMonD && d < 1.5) { bestMonD = d; bestMon = m; }
+  }
+  if (bestMon) {
+    showMonumentTip(bestMon, e.clientX-r.left, e.clientY-r.top);
+    return;
+  }
+
+  // Plant hit?
   let best=null, bestD=99;
   for(const [k,pl] of Object.entries(plantGrid)) {
     const d=Math.abs(pl.gx-gx_f)+Math.abs(pl.gy-gy_f);
     if(d<bestD && d<2) { bestD=d; best=pl; }
   }
-  if(best) { showTip(best, e.clientX-r.left, e.clientY-r.top); }
+  if(best) {
+    showTip(best, e.clientX-r.left, e.clientY-r.top);
+    spawnSparklesAtPlant(best);
+  }
   else hideTip();
 }
 
@@ -873,6 +1474,16 @@ function showTip(pl, sx, sy) {
   document.getElementById('pt-s').textContent=`Stage ${pl.stage}/5 - ${SLBLS[pl.stage-1]}`;
   document.getElementById('pt-d').textContent=d.desc+(pl.earned?` - Earned ${pl.earned}`:'');
   document.getElementById('pt-b').style.cssText=`width:${pl.stage/5*100}%;background:linear-gradient(90deg,${d.col}88,${d.col})`;
+  positionTip(sx, sy);
+}
+function showMonumentTip(mon, sx, sy) {
+  document.getElementById('pt-n').textContent = mon.label;
+  document.getElementById('pt-s').textContent = `Monument · ${mon.threshold} pts`;
+  document.getElementById('pt-d').textContent = mon.desc;
+  document.getElementById('pt-b').style.cssText = `width:100%;background:linear-gradient(90deg,#c8a878,#7a5030)`;
+  positionTip(sx, sy);
+}
+function positionTip(sx, sy) {
   const tip=document.getElementById('ptip');
   let tx=sx+16, ty=sy-16;
   if(tx+210>W) tx=sx-226; if(ty+140>H) ty=sy-150; if(ty<8) ty=8;
@@ -888,6 +1499,7 @@ window.addEventListener('DOMContentLoaded', () => {
   draw();
   setTimeout(()=>{ const sf=document.getElementById('sf'); if(sf) sf.style.width=sf.dataset.p+'%'; },400);
 });
+window.addEventListener('resize', () => { resize(); doReset(); });
 </script>
 {% endblock %}
 {% endif %}
